@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package beskar.api.event.v1;
+
+option go_package = "go.ciq.dev/beskar/pkg/api/event/v1;event";
+
+message ManifestEvent {
+  string digest = 1;
+  string repository = 2;
+  string mediatype = 3;
+  bytes payload = 4;
+}
+
+message ManifestDeleteEvent {
+  string digest = 1;
+  string repository = 2;
+}

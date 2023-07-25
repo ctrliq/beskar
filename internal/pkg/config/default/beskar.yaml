@@ -1,0 +1,45 @@
+profiling: true
+
+cache:
+  addr: 0.0.0.0:5102
+  size: 64
+
+gossip:
+  addr: 0.0.0.0:5101
+  key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
+  peers: []
+  ca-cert: |-
+    -----BEGIN CERTIFICATE-----
+    MIICdTCCAfugAwIBAgIRAKdasA4ScKXLrbwHjfWGstgwCgYIKoZIzj0EAwMwbDEW
+    MBQGA1UEBhMNVW5pdGVkIFN0YXRlczELMAkGA1UECBMCQ0ExCTAHBgNVBAcTADEJ
+    MAcGA1UECRMAMQkwBwYDVQQREwAxEzARBgNVBAoTCkN0cmxJUSBJbmMxDzANBgNV
+    BAMTBmJlc2thcjAeFw0yMzA3MjExNTExMDVaFw0zMzA3MjExNTExMDVaMGwxFjAU
+    BgNVBAYTDVVuaXRlZCBTdGF0ZXMxCzAJBgNVBAgTAkNBMQkwBwYDVQQHEwAxCTAH
+    BgNVBAkTADEJMAcGA1UEERMAMRMwEQYDVQQKEwpDdHJsSVEgSW5jMQ8wDQYDVQQD
+    EwZiZXNrYXIwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAR8XTKK9546OqUs3A1AXrD0
+    mO4Ka2x4AvoW4vLVdYDWEhmwz2uqkgwoSYYA+uQTd0rtS5wuYa8tOjE77MY4myjl
+    1/1BMIdAJHWMQ79bbZpXxdMr/YqDBzY0mysrfzySIOSjYTBfMA4GA1UdDwEB/wQE
+    AwIChDAdBgNVHSUEFjAUBggrBgEFBQcDAgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUw
+    AwEB/zAdBgNVHQ4EFgQUcz5+lP2vdTfuyc8MaVdBdl8rn1IwCgYIKoZIzj0EAwMD
+    aAAwZQIwMUS8BBAKm2TuD+7VXsO87CXWyiMJezZKKP7vJk9TIEv/goXMTVxU6V4S
+    BOm/cbz1AjEAtZ+OTBspk+Jx9uhVoDeNS8dRVyzaW4dx5bigSd3HtlNlQAC5imKK
+    OHxKI3NDc3QN
+    -----END CERTIFICATE-----
+  ca-key: |-
+    -----BEGIN EC PRIVATE KEY-----
+    MIGkAgEBBDD43m4yL4CSiZ65oHKfBqxqBLL3Tkm+FmVN7D2HCNW5qzm6JqJj9mBE
+    Kn2YgR01wKegBwYFK4EEACKhZANiAAR8XTKK9546OqUs3A1AXrD0mO4Ka2x4AvoW
+    4vLVdYDWEhmwz2uqkgwoSYYA+uQTd0rtS5wuYa8tOjE77MY4myjl1/1BMIdAJHWM
+    Q79bbZpXxdMr/YqDBzY0mysrfzySIOQ=
+    -----END EC PRIVATE KEY-----
+
+plugins:
+  yum:
+    prefix: /yum
+    mediatype: application/vnd.ciq.rpm-package.v1.config+json
+    backends:
+    - url: http://127.0.0.1:5103?executable=beskar-yum
+      mtls:
+        enabled: false
+        ca-cert: /path/to/ca/cert
+        ca-key: /path/to/ca/key

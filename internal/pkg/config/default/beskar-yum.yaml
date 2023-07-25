@@ -1,0 +1,19 @@
+addr: 127.0.0.1:5103
+
+profiling: true
+datadir: /tmp/beskar-yum
+
+registry:
+  url: http://127.0.0.1:5100
+  username: beskar
+  password: beskar
+
+s3:
+  enabled: true
+  endpoint: 127.0.0.1:9100
+  bucket: git-repos
+  access-key-id: minioadmin
+  secret-access-key: minioadmin
+  session-token:
+  region: us-east-1
+  disable-ssl: true
