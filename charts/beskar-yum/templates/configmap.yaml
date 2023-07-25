@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "beskar-yum.fullname" . }}-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar-yum.labels" . | nindent 4 }}
+data:
+  beskar-yum.yaml: |-
+{{ toYaml .Values.configData | indent 4 }}

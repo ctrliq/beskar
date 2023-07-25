@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "beskar.fullname" . }}-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar.labels" . | nindent 4 }}
+data:
+  beskar.yaml: |-
+{{ toYaml .Values.configData | indent 4 }}
+{{- include "beskar.plugins" . | nindent 4 }}

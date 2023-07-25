@@ -1,0 +1,32 @@
+version: 1.0
+
+addr: 127.0.0.1:5200
+
+profiling: true
+datadir: /tmp/beskar-yum
+
+registry:
+  url: http://127.0.0.1:5100
+  username: beskar
+  password: beskar
+
+storage:
+  driver: filesystem
+  prefix: ""
+  s3:
+    endpoint: 127.0.0.1:9100
+    bucket: beskar-yum
+    access-key-id: minioadmin
+    secret-access-key: minioadmin
+    session-token:
+    region: us-east-1
+    disable-ssl: true
+  filesystem:
+    directory: /tmp/beskar-yum
+  gcs:
+    bucket: beskar-yum
+    keyfile: /path/to/keyfile
+  azure:
+    container: beskar-yum
+    account-name: account_name
+    account-key: base64_encoded_account_key

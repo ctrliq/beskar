@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -e
+
+self=$(readlink -f $0)
+dir=$(dirname $(dirname $self))
+
+exec go run $dir/build/mage/cmd/mage_standalone.go -d build/mage/cmd -w $dir "$@"

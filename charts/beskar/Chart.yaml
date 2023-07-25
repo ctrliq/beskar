@@ -1,0 +1,12 @@
+apiVersion: v2
+description: A Helm chart for Beskar Artifact Registry
+name: beskar
+version: 0.0.1
+appVersion: 0.0.1
+home: https://github.com/ctrliq/beskar
+maintainers:
+- email: dev@ciq.com
+  name: CtrlIQ Inc.
+  url: https://github.com/ctrliq/beskar
+sources:
+- https://github.com/ctrliq/beskar
