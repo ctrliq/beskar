@@ -8,6 +8,6 @@ import (
 )
 
 type ManifestEventHandler interface {
-	Put(context.Context, distribution.Repository, distribution.Manifest, digest.Digest) error
+	Put(context.Context, distribution.Repository, digest.Digest, string, []byte) error
 	Delete(context.Context, digest.Digest) error
 }

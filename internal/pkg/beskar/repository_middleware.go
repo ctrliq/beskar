@@ -28,6 +28,11 @@ func (m *RepositoryMiddleware) Manifests(ctx context.Context, options ...distrib
 	if err != nil {
 		return nil, err
 	}
+	for _, option := range options {
+		if err := option.Apply(manifestService); err != nil {
+			return nil, err
+		}
+	}
 	return &manifestServiceWrapper{
 		ManifestService:      manifestService,
 		manifestEventHandler: m.manifestEventHandler,
@@ -62,7 +67,7 @@ func (w *manifestServiceWrapper) Exists(ctx context.Context, dgst digest.Digest)
 func (w *manifestServiceWrapper) Get(ctx context.Context, dgst digest.Digest, options ...distribution.ManifestServiceOption) (distribution.Manifest, error) {
 	destSink := newManifestSink(w.ManifestService, options...)
 
-	if err := w.cache.Get(ctx, dgst.String(), destSink); err != nil {
+	if err := w.cache.Get(ctx, getCacheKey(w.repository, dgst), destSink); err != nil {
 		return nil, err
 	}
 
@@ -86,11 +91,12 @@ func (w *manifestServiceWrapper) Put(ctx context.Context, manifest distribution.
 		return "", err
 	}
 
-	if err := w.cache.Set(ctx, dgst.String(), value, time.Now().Add(1*time.Hour), true); err != nil {
+	cacheKey := getCacheKey(w.repository, dgst)
+	if err := w.cache.Set(ctx, cacheKey, value, time.Now().Add(1*time.Hour), true); err != nil {
 		return "", err
 	}
 
-	return dgst, w.manifestEventHandler.Put(ctx, w.repository, manifest, dgst)
+	return dgst, w.manifestEventHandler.Put(ctx, w.repository, dgst, mediaType, payload)
 }
 
 // Delete removes the manifest specified by the given digest. Deleting
@@ -100,7 +106,7 @@ func (w *manifestServiceWrapper) Delete(ctx context.Context, dgst digest.Digest)
 		return err
 	}
 
-	if err := w.cache.Remove(ctx, dgst.String()); err != nil {
+	if err := w.cache.Remove(ctx, getCacheKey(w.repository, dgst)); err != nil {
 		return err
 	}
 

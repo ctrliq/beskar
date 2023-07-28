@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/distribution/distribution/v3"
@@ -11,21 +13,24 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
+func getCacheKey(repository distribution.Repository, dgst digest.Digest) string {
+	return fmt.Sprintf("%s@%s", repository.Named().Name(), dgst.String())
+}
+
 type ManifestSink struct {
 	groupcache.Sink
-	byteView        *groupcache.ByteView
+	value           []byte
 	manifestService distribution.ManifestService
 	options         []distribution.ManifestServiceOption
 }
 
 func newManifestSink(manifestService distribution.ManifestService, options ...distribution.ManifestServiceOption) *ManifestSink {
-	byteView := &groupcache.ByteView{}
-	return &ManifestSink{
-		Sink:            groupcache.ByteViewSink(byteView),
-		byteView:        byteView,
+	s := &ManifestSink{
 		manifestService: manifestService,
 		options:         options,
 	}
+	s.Sink = groupcache.AllocatingByteSliceSink(&s.value)
+	return s
 }
 
 func (ms *ManifestSink) FromManifest(manifest distribution.Manifest) error {
@@ -45,14 +50,16 @@ func (ms *ManifestSink) FromManifest(manifest distribution.Manifest) error {
 func (ms *ManifestSink) ToManifest() (distribution.Manifest, error) {
 	var gm gobManifest
 
-	reader := ms.byteView.Reader()
-	if err := gob.NewDecoder(reader).Decode(&gm); err != nil {
+	if err := gob.NewDecoder(bytes.NewReader(ms.value)).Decode(&gm); err != nil {
 		return nil, err
 	}
 
 	manifest, _, err := distribution.UnmarshalManifest(gm.MediaType, gm.Payload)
+	if err != nil {
+		return nil, err
+	}
 
-	return manifest, err
+	return manifest, nil
 }
 
 type gobManifest struct {
@@ -81,7 +88,12 @@ func (cacheGetter) Get(ctx context.Context, key string, dest groupcache.Sink) er
 	if !ok {
 		return nil
 	}
-	dgst := digest.Digest(key)
+
+	idx := strings.Index(key, "@")
+	if idx < 0 || idx+1 == len(key) {
+		return fmt.Errorf("wrong cache key format")
+	}
+	dgst := digest.Digest(key[idx+1:])
 
 	manifest, err := manifestSink.manifestService.Get(ctx, dgst, manifestSink.options...)
 	if err != nil {

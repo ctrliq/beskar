@@ -50,6 +50,7 @@ func (m *RegistryMiddleware) Repository(ctx context.Context, name reference.Name
 	if err != nil {
 		return nil, err
 	}
+
 	return &RepositoryMiddleware{
 		repository:           repository,
 		manifestEventHandler: m.manifestEventHandler,

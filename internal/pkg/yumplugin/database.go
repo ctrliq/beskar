@@ -44,14 +44,10 @@ func (p *Plugin) AddPackageToDatabase(ctx context.Context, id, repository, packa
 		return strings.TrimSpace(stdout.String()), nil
 	}
 
-	if p.beskarYumConfig.S3.Enabled {
-		return p.addPackageToDatabaseS3(ctx, id, repository, packageDir, keepDatabaseDir)
-	}
-
-	return p.addPackageToDatabaseFS(ctx, id, repository, packageDir, keepDatabaseDir)
+	return p.addPackageToDatabase(ctx, id, repository, packageDir, keepDatabaseDir)
 }
 
-func (p *Plugin) addPackageToDatabaseS3(ctx context.Context, id, repository, packageDir string, keepDatabaseDir bool) (string, error) {
+func (p *Plugin) addPackageToDatabase(ctx context.Context, id, repository, packageDir string, keepDatabaseDir bool) (string, error) {
 	key := filepath.Join("/", filepath.Dir(repository), "doltdb.tar.lz4")
 
 	dbPath, err := os.MkdirTemp(p.beskarYumConfig.DataDir, "db-")
@@ -100,9 +96,4 @@ func (p *Plugin) addPackageToDatabaseS3(ctx context.Context, id, repository, pac
 	}
 
 	return dbPath, remoteWriter.Close()
-}
-
-//nolint:revive // implemented later
-func (p *Plugin) addPackageToDatabaseFS(ctx context.Context, id, repository, packageDir string, keepDatabaseDir bool) (string, error) {
-	return "", fmt.Errorf("not supported yet")
 }

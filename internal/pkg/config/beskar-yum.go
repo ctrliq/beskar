@@ -15,6 +15,11 @@ import (
 const (
 	BeskarYumConfigFile     = "beskar-yum.yaml"
 	DefaultBeskarYumDataDir = "/tmp/beskar-yum"
+
+	FSStorageDriver    = "filesystem"
+	S3StorageDriver    = "s3"
+	GCSStorageDriver   = "gcs"
+	AzureStorageDriver = "azure"
 )
 
 //go:embed default/beskar-yum.yaml
@@ -26,8 +31,7 @@ type BeskarYumRegistry struct {
 	Password string `yaml:"password"`
 }
 
-type BeskarYumS3 struct {
-	Enabled         bool   `yaml:"enabled"`
+type BeskarYumS3Storage struct {
 	Endpoint        string `yaml:"endpoint"`
 	Bucket          string `yaml:"bucket"`
 	AccessKeyID     string `yaml:"access-key-id"`
@@ -37,10 +41,42 @@ type BeskarYumS3 struct {
 	DisableSSL      bool   `yaml:"disable-ssl"`
 }
 
+type BeskarYumFSStorage struct {
+	Directory string `yaml:"directory"`
+}
+
+type BeskarYumGCSStorage struct {
+	Bucket  string `yaml:"bucket"`
+	Keyfile string `yaml:"keyfile"`
+}
+
+type BeskarYumAzureStorage struct {
+	Container   string `yaml:"container"`
+	AccountName string `yaml:"account-name"`
+	AccountKey  string `yaml:"account-key"`
+}
+
+type BeskarYumStorage struct {
+	Driver string                `yaml:"driver"`
+	Prefix string                `yaml:"prefix"`
+	S3     BeskarYumS3Storage    `yaml:"s3"`
+	FS     BeskarYumFSStorage    `yaml:"filesystem"`
+	GCS    BeskarYumGCSStorage   `yaml:"gcs"`
+	Azure  BeskarYumAzureStorage `yaml:"azure"`
+}
+
+func (b BeskarYumStorage) IsS3() bool {
+	return b.Driver == S3StorageDriver
+}
+
+func (b BeskarYumStorage) IsFS() bool {
+	return b.Driver == FSStorageDriver
+}
+
 type BeskarYumConfig struct {
 	Addr            string            `yaml:"addr"`
 	Registry        BeskarYumRegistry `yaml:"registry"`
-	S3              BeskarYumS3       `yaml:"s3"`
+	Storage         BeskarYumStorage  `yaml:"storage"`
 	Profiling       bool              `yaml:"profiling"`
 	DataDir         string            `yaml:"datadir"`
 	ConfigDirectory string            `yaml:"-"`

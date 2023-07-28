@@ -20,10 +20,10 @@ type proxyPlugin struct {
 	url *url.URL
 }
 
-func (pp proxyPlugin) send(ctx context.Context, repository string, mediatype string, payload []byte, dgst string) error {
+func (pp proxyPlugin) send(ctx context.Context, repository string, mediaType string, payload []byte, dgst string) error {
 	event := &eventv1.ManifestEvent{
 		Digest:     dgst,
-		Mediatype:  mediatype,
+		Mediatype:  mediaType,
 		Payload:    payload,
 		Repository: repository,
 	}

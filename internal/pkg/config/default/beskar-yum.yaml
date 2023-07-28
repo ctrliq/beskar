@@ -1,4 +1,4 @@
-addr: 127.0.0.1:5103
+addr: 127.0.0.1:5200
 
 profiling: true
 datadir: /tmp/beskar-yum
@@ -8,12 +8,24 @@ registry:
   username: beskar
   password: beskar
 
-s3:
-  enabled: true
-  endpoint: 127.0.0.1:9100
-  bucket: git-repos
-  access-key-id: minioadmin
-  secret-access-key: minioadmin
-  session-token:
-  region: us-east-1
-  disable-ssl: true
+storage:
+  driver: filesystem
+  s3:
+    endpoint: 127.0.0.1:9100
+    bucket: beskar-yum
+    access-key-id: minioadmin
+    secret-access-key: minioadmin
+    session-token:
+    region: us-east-1
+    disable-ssl: true
+    prefix:
+  filesystem:
+    directory: /tmp/beskar-yum
+  gcs:
+    bucket: beskar-yum
+    keyfile: /path/to/keyfile
+    prefix:
+  azure:
+    container: beskar-yum
+    account-name: account_name
+    account-key: base64_encoded_account_key

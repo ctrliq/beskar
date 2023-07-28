@@ -12,9 +12,11 @@ import (
 
 	"github.com/distribution/distribution/v3"
 	"github.com/distribution/distribution/v3/configuration"
+	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/reference"
+	"github.com/distribution/distribution/v3/registry"
 	"github.com/distribution/distribution/v3/registry/auth"
-	"github.com/distribution/distribution/v3/registry/handlers"
+	"github.com/distribution/distribution/v3/version"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/memberlist"
@@ -26,49 +28,56 @@ import (
 	"go.ciq.dev/beskar/pkg/mtls"
 	"go.ciq.dev/beskar/pkg/netutil"
 
+	// load distribution filesystem storage driver
+	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	// load distribution s3 storage driver
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/s3-aws"
+	// load distribution azure storage driver
+	_ "github.com/distribution/distribution/v3/registry/storage/driver/azure"
+	// load distribution gcs storage driver
+	_ "github.com/distribution/distribution/v3/registry/storage/driver/gcs"
 )
 
 type Registry struct {
-	registry       distribution.Namespace
-	beskarConfig   *config.BeskarConfig
-	registryConfig *configuration.Configuration
-	router         *mux.Router
-	server         http.Server
-	member         *gossip.Member
-	manifestCache  *cache.GroupCache
-	proxyPlugins   map[string]*proxyPlugin
+	registry      distribution.Namespace
+	beskarConfig  *config.BeskarConfig
+	router        *mux.Router
+	server        *registry.Registry
+	member        *gossip.Member
+	manifestCache *cache.GroupCache
+	proxyPlugins  map[string]*proxyPlugin
+	errCh         chan error
 }
 
-func New(ctx context.Context, beskarConfig *config.BeskarConfig, registryConfig *configuration.Configuration, errCh chan error) (*Registry, error) {
+func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) {
+	ctx := dcontext.WithVersion(dcontext.Background(), version.Version)
+
 	beskarRegistry := &Registry{
-		beskarConfig:   beskarConfig,
-		registryConfig: registryConfig,
-		proxyPlugins:   make(map[string]*proxyPlugin),
+		beskarConfig: beskarConfig,
+		proxyPlugins: make(map[string]*proxyPlugin),
+		errCh:        make(chan error, 1),
 	}
 
-	// init gossip here
 	member, err := gossip.Start(beskarConfig, nil, 30*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	beskarRegistry.member = member
 
 	remoteState, err := member.RemoteState()
 	if err != nil {
 		if len(member.Nodes()) == 0 {
-			return nil, err
+			return nil, nil, err
 		}
 		remoteState, err = member.LocalState()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	caPem, err := mtls.UnmarshalCAPEM(remoteState)
 	if err != nil {
-		return nil, fmt.Errorf("while unmarshalling CA certificates: %w", err)
+		return nil, nil, fmt.Errorf("while unmarshalling CA certificates: %w", err)
 	}
 
 	cacheClientConfig, err := mtls.GenerateClientConfig(
@@ -77,12 +86,12 @@ func New(ctx context.Context, beskarConfig *config.BeskarConfig, registryConfig 
 		time.Now().AddDate(10, 0, 0),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("while generating cache client mTLS certificates: %w", err)
+		return nil, nil, fmt.Errorf("while generating cache client mTLS certificates: %w", err)
 	}
 
 	localIPs, err := netutil.LocalIPs()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cacheServerConfig, err := mtls.GenerateServerConfig(
@@ -92,7 +101,7 @@ func New(ctx context.Context, beskarConfig *config.BeskarConfig, registryConfig 
 		mtls.WithCertRequestIPs(localIPs...),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("while generating cache server mTLS certificates: %w", err)
+		return nil, nil, fmt.Errorf("while generating cache server mTLS certificates: %w", err)
 	}
 
 	cacheAddr := fmt.Sprintf("https://%s", beskarConfig.Cache.Addr)
@@ -112,48 +121,47 @@ func New(ctx context.Context, beskarConfig *config.BeskarConfig, registryConfig 
 	go func() {
 		err = manifestCache.Start(cacheServerConfig)
 		if err != nil {
-			errCh <- err
+			beskarRegistry.errCh <- err
 		}
 	}()
 
 	cacheGroup, err := manifestCache.NewGroup("manifests", cache.DefaultCacheSize, cacheGetter{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	registryCh, err := registerRegistryMiddleware(beskarRegistry, cacheGroup)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := auth.Register("beskar", auth.InitFunc(newAccessController)); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	app := handlers.NewApp(ctx, registryConfig)
+	beskarRegistry.router = mux.NewRouter()
+
+	registry.RegisterHandler(func(config *configuration.Configuration, handler http.Handler) http.Handler {
+		beskarRegistry.router.NotFoundHandler = handler
+		return beskarRegistry.router
+	})
+
+	beskarRegistry.server, err = registry.NewRegistry(ctx, beskarConfig.Registry.Configuration)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	beskarRegistry.registry = <-registryCh
 
-	beskarRegistry.router = mux.NewRouter()
-	beskarRegistry.router.NotFoundHandler = app
-
 	if err := initPlugins(ctx, beskarRegistry); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if beskarConfig.Profiling {
 		beskarRegistry.setProfiling()
 	}
 
-	beskarRegistry.server = http.Server{
-		Handler:           beskarRegistry.router,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      20 * time.Second,
-		IdleTimeout:       30 * time.Second,
-		ReadHeaderTimeout: 4 * time.Second,
-	}
-
-	return beskarRegistry, nil
+	return ctx, beskarRegistry, nil
 }
 
 func (br *Registry) setProfiling() {
@@ -221,38 +229,48 @@ func (br *Registry) startGossipWatcher() {
 	}
 }
 
-func (br *Registry) Serve() error {
-	ln, err := net.Listen("tcp", br.registryConfig.HTTP.Addr)
-	if err != nil {
-		return err
-	}
-	return br.server.Serve(ln)
+func (br *Registry) Serve(ctx context.Context) error {
+	go func() {
+		err := br.server.ListenAndServe()
+		gossipErr := br.member.Shutdown()
+		if err == nil {
+			err = gossipErr
+		}
+		manifestCacheErr := br.manifestCache.Stop(ctx)
+		if err == nil {
+			err = manifestCacheErr
+		}
+		br.errCh <- err
+	}()
+	return <-br.errCh
 }
 
-func (br *Registry) Put(ctx context.Context, repository distribution.Repository, manifest distribution.Manifest, dgst digest.Digest) error {
-	_, payload, err := manifest.Payload()
-	if err != nil {
-		return err
+func (br *Registry) Put(ctx context.Context, repository distribution.Repository, dgst digest.Digest, mediaType string, payload []byte) error {
+	switch mediaType {
+	case "application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v2+json":
+		ociManifest, err := v1.ParseManifest(bytes.NewReader(payload))
+		if err != nil {
+			return err
+		}
+		mediaType = string(ociManifest.Config.MediaType)
+		proxyPlugin, ok := br.proxyPlugins[mediaType]
+		if !ok {
+			return nil
+		}
+
+		return proxyPlugin.send(
+			ctx,
+			repository.Named().String(),
+			mediaType,
+			payload,
+			dgst.String(),
+		)
+	default:
 	}
 
-	ociManifest, err := v1.ParseManifest(bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-
-	mediatype := string(ociManifest.Config.MediaType)
-	proxyPlugin, ok := br.proxyPlugins[mediatype]
-	if !ok {
-		return nil
-	}
-
-	return proxyPlugin.send(
-		ctx,
-		repository.Named().String(),
-		mediatype,
-		payload,
-		dgst.String(),
-	)
+	return nil
 }
 
 func (br *Registry) Delete(context.Context, digest.Digest) error {

@@ -1,11 +1,11 @@
 profiling: true
 
 cache:
-  addr: 0.0.0.0:5102
+  addr: 0.0.0.0:5103
   size: 64
 
 gossip:
-  addr: 0.0.0.0:5101
+  addr: 0.0.0.0:5102
   key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
   peers: []
   ca-cert: |-
@@ -38,8 +38,47 @@ plugins:
     prefix: /yum
     mediatype: application/vnd.ciq.rpm-package.v1.config+json
     backends:
-    - url: http://127.0.0.1:5103?executable=beskar-yum
+    - url: http://127.0.0.1:5200?executable=beskar-yum
       mtls:
         enabled: false
         ca-cert: /path/to/ca/cert
         ca-key: /path/to/ca/key
+
+registry:
+  version: 0.1
+  log:
+    fields:
+      service: registry
+  storage:
+    filesystem:
+      rootdirectory: /var/lib/registry
+      maxthreads: 100
+    #s3:
+    #  accesskey: minioadmin
+    #  secretkey: minioadmin
+    #  region: us-east-1
+    #  regionendpoint: http://127.0.0.1:9100
+    #  bucket: docker
+    #  encrypt: false
+    #  secure: true
+    #  v4auth: true
+    #  chunksize: 5242880
+    #  rootdirectory: /
+  delete:
+    enabled: true
+  middleware:
+    registry:
+      - name: beskar
+  http:
+    addr: 0.0.0.0:5100
+    net: tcp
+    headers:
+      X-Content-Type-Options: [nosniff]
+  health:
+    storagedriver:
+      enabled: true
+      interval: 10s
+      threshold: 3
+  auth:
+    beskar:
+      account: beskar:$2y$10$wxHHFuYbK4y4wBqCSU7pROuocx9CyV6EXKNv8id0eJzZwKghjUnyC

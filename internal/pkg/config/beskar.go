@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distribution/distribution/v3/configuration"
 	"go.ciq.dev/beskar/pkg/mtls"
 	"gopkg.in/yaml.v3"
 )
@@ -124,11 +125,29 @@ type Plugin struct {
 	Backends  []PluginBackend `yaml:"backends"`
 }
 
+type Registry struct {
+	*configuration.Configuration `yaml:",inline"`
+}
+
+func (r *Registry) UnmarshalYAML(value *yaml.Node) error {
+	v := make(map[string]interface{})
+	if err := value.Decode(v); err != nil {
+		return err
+	}
+	out, err := yaml.Marshal(v)
+	if err != nil {
+		return err
+	}
+	r.Configuration, err = configuration.Parse(bytes.NewReader(out))
+	return err
+}
+
 type BeskarConfig struct {
 	Profiling bool              `yaml:"profiling"`
 	Cache     Cache             `yaml:"cache"`
 	Gossip    Gossip            `yaml:"gossip"`
 	Plugins   map[string]Plugin `yaml:"plugins"`
+	Registry  Registry          `yaml:"registry"`
 }
 
 func (bc *BeskarConfig) RunInKubernetes() bool {
@@ -136,6 +155,7 @@ func (bc *BeskarConfig) RunInKubernetes() bool {
 }
 
 func ParseBeskarConfig(dir string) (*BeskarConfig, error) {
+	inMemoryConfig := false
 	customDir := false
 	filename := filepath.Join(DefaultConfigDir, BeskarConfigFile)
 	if dir != "" {
@@ -151,6 +171,7 @@ func ParseBeskarConfig(dir string) (*BeskarConfig, error) {
 			return nil, err
 		}
 		configReader = strings.NewReader(defaultBeskarConfig)
+		inMemoryConfig = true
 	} else {
 		defer f.Close()
 		configReader = f
@@ -159,6 +180,17 @@ func ParseBeskarConfig(dir string) (*BeskarConfig, error) {
 	beskarConfig := new(BeskarConfig)
 	if err := yaml.NewDecoder(configReader).Decode(beskarConfig); err != nil {
 		return nil, err
+	}
+
+	if beskarConfig.Registry.Configuration == nil {
+		return nil, fmt.Errorf("registry configuration is missing")
+	}
+
+	storage := beskarConfig.Registry.Configuration.Storage
+
+	if inMemoryConfig && storage.Type() == "filesystem" {
+		params := storage.Parameters()
+		params["rootdirectory"] = "/tmp/beskar-registry"
 	}
 
 	runInKubernetes := beskarConfig.RunInKubernetes()

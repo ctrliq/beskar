@@ -146,9 +146,6 @@ func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, ti
 					break
 				}
 				for _, address := range subset.Addresses {
-					if address.IP == podIP {
-						continue
-					}
 					subsetIPs = append(subsetIPs, address.IP)
 				}
 			}
@@ -156,13 +153,18 @@ func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, ti
 
 		if gossipPort == 0 {
 			return fmt.Errorf("no gossip port found")
-		} else if len(subsetIPs) == 0 {
-			return fmt.Errorf("no gossip peer found")
 		}
 
 		for _, ip := range subsetIPs {
+			if ip == podIP {
+				continue
+			}
 			peer := net.JoinHostPort(ip, fmt.Sprintf("%d", gossipPort))
 			peers = append(peers, peer)
+		}
+
+		if len(subsetIPs) == 0 {
+			return fmt.Errorf("no gossip peer found")
 		}
 
 		return nil

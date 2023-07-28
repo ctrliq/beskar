@@ -11,13 +11,58 @@ import (
 	"github.com/magefile/mage/mg"
 )
 
+var buildContext int
+
+func withBuildOptions(ctx context.Context, options *buildOptions) context.Context {
+	return context.WithValue(ctx, &buildContext, options)
+}
+
+func getBuildOptions(ctx context.Context) (*buildOptions, bool) {
+	bo, exists := ctx.Value(&buildContext).(*buildOptions)
+	return bo, exists
+}
+
+type publishOptions struct {
+	registry   string
+	repository string
+	username   string
+	password   *dagger.Secret
+}
+
+type buildOptions struct {
+	client         *dagger.Client
+	platforms      []dagger.Platform
+	publishOptions *publishOptions
+}
+
+type binaryConfig struct {
+	configFiles       map[string]string
+	excludedPlatforms map[dagger.Platform]struct{}
+}
+
+var binaries = map[string]binaryConfig{
+	"beskar": {
+		configFiles: map[string]string{
+			"internal/pkg/config/default/beskar.yaml": "/etc/beskar/beskar.yaml",
+		},
+	},
+	"beskarctl": {},
+	"beskar-yum": {
+		// int/uint overflow issues with doltdb and 32 bits architectures
+		excludedPlatforms: map[dagger.Platform]struct{}{
+			"linux/arm/v6": {},
+			"linux/arm/v7": {},
+		},
+		configFiles: map[string]string{
+			"internal/pkg/config/default/beskar-yum.yaml": "/etc/beskar/beskar-yum.yaml",
+		},
+	},
+}
+
 type Build mg.Namespace
 
 // All builds all targets locally.
 func (b Build) All(ctx context.Context) error {
-	if err := b.Proto(ctx); err != nil {
-		return err
-	}
 	mg.CtxDeps(
 		ctx,
 		b.Beskar,
@@ -47,7 +92,7 @@ func (b Build) Beskarctl(ctx context.Context) error {
 func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
-		mg.F(b.build, "beskar-yum"),
+		mg.F(b.Plugin, "beskar-yum"),
 	)
 }
 
@@ -59,39 +104,128 @@ func (b Build) Plugin(ctx context.Context, name string) error {
 }
 
 func (b Build) build(ctx context.Context, name string) error {
-	fmt.Println("Building", name)
+	binaryConfig := binaries[name]
 
-	client, err := getDaggerClient(ctx)
+	currentPlatform, err := getCurrentPlatform()
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
-	src := getSource(client)
+	buildOpts, ok := getBuildOptions(ctx)
 
-	golang := client.Container().From(GoImage)
-
-	golang = golang.
-		WithDirectory("/src", src).
-		WithWorkdir("/src").
-		With(goCache(client))
-
-	path := filepath.Join("build", "output", name)
-	inputCmd := filepath.Join("cmd", name)
-
-	golang = golang.WithExec([]string{
-		"go", "build", "-mod=readonly", "-o", path, "./" + inputCmd,
-	})
-
-	if err := printOutput(ctx, golang); err != nil {
-		return err
+	if !ok {
+		buildOpts = &buildOptions{
+			platforms: []dagger.Platform{
+				dagger.Platform(currentPlatform),
+			},
+		}
+	} else if len(buildOpts.platforms) == 0 {
+		buildOpts.platforms = []dagger.Platform{
+			dagger.Platform(currentPlatform),
+		}
 	}
 
-	output := golang.File(path)
+	client := buildOpts.client
 
-	_, err = output.Export(ctx, path)
-	if err != nil {
-		return err
+	if client == nil {
+		client, err = getDaggerClient(ctx)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+	}
+
+	containers := make([]*dagger.Container, 0, len(buildOpts.platforms))
+
+	for _, platform := range buildOpts.platforms {
+		if _, ok := binaryConfig.excludedPlatforms[platform]; ok {
+			continue
+		}
+
+		binary := name
+		if string(platform) != currentPlatform {
+			binary += "-" + getPlatformBinarySuffix(string(platform))
+		}
+
+		fmt.Printf("Building %s (%s)\n", binary, platform)
+
+		src := getSource(client)
+
+		golang := client.Container().From(GoImage)
+
+		golang = golang.
+			WithDirectory("/src", src).
+			WithDirectory("/output", client.Directory()).
+			WithWorkdir("/src").
+			WithEnvVariable("CGO_ENABLED", "0").
+			WithEnvVariable("GOOS", "linux").
+			With(goCache(client))
+
+		envs, ok := supportedPlatforms[platform]
+		if !ok {
+			return fmt.Errorf("platform %s not supported", platform)
+		}
+
+		for key, value := range envs {
+			golang = golang.WithEnvVariable(key, value)
+		}
+
+		path := filepath.Join("/output", binary)
+		inputCmd := filepath.Join("cmd", name)
+
+		golang = golang.WithExec([]string{
+			"go", "build", "-mod=readonly", "-o", path, "./" + inputCmd,
+		})
+
+		if err := printOutput(ctx, golang); err != nil {
+			return err
+		}
+
+		output := golang.File(path)
+
+		if buildOpts.publishOptions == nil {
+			_, err = output.Export(ctx, filepath.Join("build", "output", binary))
+			if err != nil {
+				return err
+			}
+		} else {
+			container := client.
+				Container(dagger.ContainerOpts{
+					Platform: platform,
+				}).
+				From(BaseImage).
+				WithFile(filepath.Join("/usr/bin", name), output)
+
+			for configSrc, configDst := range binaryConfig.configFiles {
+				container = container.WithFile(configDst, golang.File(configSrc))
+			}
+
+			containers = append(
+				containers,
+				container,
+			)
+		}
+	}
+
+	if len(containers) > 0 && buildOpts.publishOptions != nil {
+		imageRepository := fmt.Sprintf("%s/%s", buildOpts.publishOptions.registry, buildOpts.publishOptions.repository)
+		images := client.Container()
+
+		if buildOpts.publishOptions.username != "" || buildOpts.publishOptions.password != nil {
+			images = images.WithRegistryAuth(
+				buildOpts.publishOptions.registry,
+				buildOpts.publishOptions.username,
+				buildOpts.publishOptions.password,
+			)
+		}
+
+		digest, err := images.Publish(ctx, imageRepository, dagger.ContainerPublishOpts{
+			PlatformVariants: containers,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Println("Image pushed", digest)
 	}
 
 	return nil

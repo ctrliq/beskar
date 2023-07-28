@@ -57,10 +57,7 @@ func (gc *GroupCache) Start(tlsConfig *tls.Config) error {
 	ln = tls.NewListener(ln, tlsConfig)
 	gc.server = http.Server{
 		Handler:           gc.pool,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       20 * time.Second,
-		ReadHeaderTimeout: 2 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return gc.server.Serve(ln)
 }
