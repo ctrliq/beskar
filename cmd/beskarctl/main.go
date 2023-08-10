@@ -16,8 +16,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/orasrpm"
 	"go.ciq.dev/beskar/pkg/oras"
+	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
 var Version = "dev"

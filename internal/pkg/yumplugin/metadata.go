@@ -17,9 +17,9 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/klauspost/compress/gzip"
-	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/orasrpm"
 	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/yummeta"
 	"go.ciq.dev/beskar/pkg/oras"
+	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
 const (
