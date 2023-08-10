@@ -15,8 +15,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/orasrpm"
 	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/yumdb"
+	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
 func (p *Plugin) processPackages(ctx context.Context, manifests []*v1.Manifest) {

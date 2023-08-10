@@ -13,9 +13,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/gorilla/mux"
-	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/orasrpm"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/oras"
+	"go.ciq.dev/beskar/pkg/orasrpm"
 	"google.golang.org/protobuf/proto"
 )
 
