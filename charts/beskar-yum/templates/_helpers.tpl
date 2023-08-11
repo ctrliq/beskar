@@ -88,6 +88,7 @@ Create the name of the service account to use
       name: {{ template "beskar-yum.fullname" . }}-secret
       key: azureAccountKey
 {{- else if eq .Values.configData.storage.driver "s3" }}
+  {{- if and .Values.secrets.s3.secretKey .Values.secrets.s3.accessKey }}
 - name: BESKARYUM_STORAGE_S3_ACCESSKEYID
   valueFrom:
     secretKeyRef:
@@ -98,6 +99,7 @@ Create the name of the service account to use
     secretKeyRef:
       name: {{ template "beskar-yum.fullname" . }}-secret
       key: s3SecretKey
+  {{- end }}
 {{- else if eq .Values.configData.storage.driver "gcs" }}
 - name: BESKARYUM_STORAGE_GCS_KEYFILE
   value: /etc/gcs-keyfile
