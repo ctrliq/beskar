@@ -15,15 +15,26 @@ import (
 func initS3(ctx context.Context, storageConfig config.BeskarYumS3Storage, prefix string) (*blob.Bucket, error) {
 	bucketName := storageConfig.Bucket
 
+	opts := []s3.AuthMethodOption{
+		s3.WithDisableSSL(storageConfig.DisableSSL),
+	}
+
+	if storageConfig.AccessKeyID != "" || storageConfig.SecretAccessKey != "" || storageConfig.SessionToken != "" {
+		opts = append(opts,
+			s3.WithCredentials(
+				storageConfig.AccessKeyID,
+				storageConfig.SecretAccessKey,
+				storageConfig.SessionToken,
+			))
+	}
+
+	if storageConfig.Region != "" {
+		opts = append(opts, s3.WithRegion(storageConfig.Region))
+	}
+
 	authMethod, err := s3.NewAuthMethod(
 		storageConfig.Endpoint,
-		s3.WithCredentials(
-			storageConfig.AccessKeyID,
-			storageConfig.SecretAccessKey,
-			storageConfig.SessionToken,
-		),
-		s3.WithRegion(storageConfig.Region),
-		s3.WithDisableSSL(storageConfig.DisableSSL),
+		opts...,
 	)
 	if err != nil {
 		return nil, err
