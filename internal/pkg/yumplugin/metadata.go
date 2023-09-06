@@ -412,17 +412,17 @@ func (r *repoMetadata) Save(plugin *Plugin) error {
 	for _, data := range repomdRoot.Data {
 		switch data.Type {
 		case "primary":
-			data.Location.Href = fmt.Sprintf("repodata/%s-%s", "sha256:"+primaryChecksum, primaryXMLGzipFile)
+			data.Location.Href = fmt.Sprintf("repodata/%s-%s", primaryChecksum, primaryXMLGzipFile)
 		case "filelists":
-			data.Location.Href = fmt.Sprintf("repodata/%s-%s", "sha256:"+filelistsChecksum, filelistsXMLGzipFile)
+			data.Location.Href = fmt.Sprintf("repodata/%s-%s", filelistsChecksum, filelistsXMLGzipFile)
 		case "other":
-			data.Location.Href = fmt.Sprintf("repodata/%s-%s", "sha256:"+otherChecksum, otherXMLGzipFile)
+			data.Location.Href = fmt.Sprintf("repodata/%s-%s", otherChecksum, otherXMLGzipFile)
 		case "primary_db":
 			for _, layer := range metadataLayers {
 				mt, _ := layer.MediaType()
 				if mt == orasrpm.PrimarySQLiteLayerType {
 					h, _ := layer.Digest()
-					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.String(), primarySQLiteFile)
+					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.Hex, primarySQLiteFile)
 					break
 				}
 			}
@@ -431,7 +431,7 @@ func (r *repoMetadata) Save(plugin *Plugin) error {
 				mt, _ := layer.MediaType()
 				if mt == orasrpm.FilelistsSQLiteLayerType {
 					h, _ := layer.Digest()
-					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.String(), filelistsSQLiteFile)
+					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.Hex, filelistsSQLiteFile)
 					break
 				}
 			}
@@ -440,7 +440,7 @@ func (r *repoMetadata) Save(plugin *Plugin) error {
 				mt, _ := layer.MediaType()
 				if mt == orasrpm.OtherSQLiteLayerType {
 					h, _ := layer.Digest()
-					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.String(), otherSQLiteFile)
+					data.Location.Href = fmt.Sprintf("repodata/%s-%s", h.Hex, otherSQLiteFile)
 					break
 				}
 			}

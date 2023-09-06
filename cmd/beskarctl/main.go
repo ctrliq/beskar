@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
@@ -70,6 +70,7 @@ func push(rpmPath string, repo, registry string) error {
 	if err != nil {
 		return fmt.Errorf("while reading %s metadata: %w", rpmPath, err)
 	}
+
 	archTag := pkg.Header.GetTag(1022)
 	arch := ""
 	if archTag == nil {
@@ -78,18 +79,11 @@ func push(rpmPath string, repo, registry string) error {
 		arch = archTag.String()
 	}
 
-	_, err = rpmFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return fmt.Errorf("while resetting RPM file descriptor cursor: %w", err)
-	}
+	rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name(), pkg.Version(), pkg.Release(), arch)
 
-	sum := sha256.New()
-	if _, err = io.Copy(sum, rpmFile); err != nil {
-		return fmt.Errorf("while computing RPM sha256 checksum: %w", err)
-	}
-	pkgid := fmt.Sprintf("%x", sum.Sum(nil))
+	pkgTag := fmt.Sprintf("%x", sha256.Sum256([]byte(rpmName)))
 
-	rawRef := filepath.Join(registry, "yum", repo, "packages:"+pkgid)
+	rawRef := filepath.Join(registry, "yum", repo, "packages:"+pkgTag)
 	ref, err := name.ParseReference(rawRef)
 	if err != nil {
 		return fmt.Errorf("while parsing reference %s: %w", rawRef, err)
@@ -104,9 +98,12 @@ func push(rpmPath string, repo, registry string) error {
 				OS:           "linux",
 			},
 		),
+		orasrpm.WithRPMLayerAnnotations(map[string]string{
+			imagespec.AnnotationTitle: rpmName,
+		}),
 	)
 
-	fmt.Printf("Pushing %s to %s\n", rpmFile.Name(), rawRef)
+	fmt.Printf("Pushing %s to %s\n", rpmName, rawRef)
 
 	return oras.Push(pusher, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 }

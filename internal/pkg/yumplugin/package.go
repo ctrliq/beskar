@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/internal/pkg/yumplugin/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
@@ -55,7 +57,7 @@ func (p *Plugin) processPackage(ctx context.Context, manifest *v1.Manifest, keep
 
 	packageLayer := manifest.Layers[layerIndex]
 
-	packageFilename := packageLayer.Annotations["org.opencontainers.image.title"]
+	packageFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
 
 	repository := manifest.Annotations["repository"]
 	ref := filepath.Join(p.registry, repository+"@sha256:"+packageLayer.Digest.Hex)
@@ -73,7 +75,7 @@ func (p *Plugin) processPackage(ctx context.Context, manifest *v1.Manifest, keep
 		return "", "", fmt.Errorf("while downloading package %s: %w", packageFilename, err)
 	}
 
-	href := fmt.Sprintf("packages/%s/%s", "sha256:"+packageLayer.Digest.Hex, packageFilename)
+	href := fmt.Sprintf("Packages/%c/%s", strings.ToLower(packageFilename)[0], packageFilename)
 	packageDir, err := extractPackageMetadata(tmpDir, repoDir, packageFilename, href)
 	if err != nil {
 		return "", "", fmt.Errorf("while extracting package %s metadata: %w", packageFilename, err)

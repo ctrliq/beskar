@@ -75,9 +75,8 @@ func New(ctx context.Context, beskarYumConfig *config.BeskarYumConfig, server bo
 	if server {
 		router := mux.NewRouter()
 		router.HandleFunc("/event", plugin.eventHandler())
-		router.HandleFunc("/yum/repo/{repository}/repodata/repomd.xml", repomdHandler(plugin))
-		router.HandleFunc("/yum/repo/{repository}/repodata/{digest}-{file}", blobsHandler("repodata"))
-		router.HandleFunc("/yum/repo/{repository}/packages/{digest}/{file}", blobsHandler("packages"))
+		router.HandleFunc("/yum/repo/{repository:.*}/repodata/{filename}", blobsHandler(plugin, "repodata"))
+		router.HandleFunc("/yum/repo/{repository:.*}/Packages/{alphanum}/{filename}", blobsHandler(plugin, "packages"))
 
 		if beskarYumConfig.Profiling {
 			plugin.setProfiling(router)
