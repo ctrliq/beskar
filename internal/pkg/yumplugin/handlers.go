@@ -5,13 +5,16 @@ package yumplugin
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/gorilla/mux"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/oras"
@@ -56,43 +59,72 @@ func (p *Plugin) eventHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func repomdHandler(plugin *Plugin) func(http.ResponseWriter, *http.Request) {
+func blobsHandler(plugin *Plugin, blobType string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
+		filename := vars["filename"]
+		repository := vars["repository"]
 
-		rawRef := filepath.Join(plugin.registry, "yum", vars["repository"], "repodata:latest")
-		ref, err := name.ParseReference(rawRef, plugin.nameOptions...)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		if filename == "" || repository == "" {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		manifest, err := oras.GetManifest(ref, plugin.remoteOptions...)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		for _, layer := range manifest.Layers {
-			if layer.MediaType != orasrpm.RepomdXMLLayerType {
-				continue
+		if filename == "repomd.xml" {
+			uri, err := getURI(plugin, repository, blobType, orasrpm.RepomdXMLLayerType, "latest")
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			} else if uri != "" {
+				http.Redirect(w, r, uri, http.StatusMovedPermanently)
+				return
 			}
-			uri := fmt.Sprintf(
-				"/v2/yum/%s/repodata/blobs/%s",
-				vars["repository"], layer.Digest.String(),
-			)
-			http.Redirect(w, r, uri, http.StatusMovedPermanently)
-			return
+		} else {
+			if blobType == "repodata" {
+				digest := strings.SplitN(filename, "-", 2)[0]
+				if digest != "" {
+					uri := fmt.Sprintf("/v2/yum/%s/%s/blobs/sha256:%s", repository, blobType, digest)
+					http.Redirect(w, r, uri, http.StatusMovedPermanently)
+				}
+			} else {
+				tag := fmt.Sprintf("%x", sha256.Sum256([]byte(filename)))
+				uri, err := getURI(plugin, repository, blobType, orasrpm.RPMPackageLayerType, tag)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				} else if uri != "" {
+					http.Redirect(w, r, uri, http.StatusMovedPermanently)
+					return
+				}
+			}
 		}
 
 		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
-func blobsHandler(blobType string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		uri := fmt.Sprintf("/v2/yum/%s/%s/blobs/%s", vars["repository"], blobType, vars["digest"])
-		http.Redirect(w, r, uri, http.StatusMovedPermanently)
+func getURI(plugin *Plugin, repository, blobType, mediaType, tag string) (string, error) {
+	rawRef := filepath.Join(plugin.registry, "yum", repository, fmt.Sprintf("%s:%s", blobType, tag))
+	ref, err := name.ParseReference(rawRef, plugin.nameOptions...)
+	if err != nil {
+		return "", err
 	}
+
+	manifest, err := oras.GetManifest(ref, plugin.remoteOptions...)
+	if err != nil {
+		return "", err
+	}
+
+	for _, layer := range manifest.Layers {
+		if layer.MediaType != types.MediaType(mediaType) {
+			continue
+		}
+		uri := fmt.Sprintf(
+			"/v2/yum/%s/%s/blobs/%s",
+			repository, blobType, layer.Digest.String(),
+		)
+		return uri, nil
+	}
+
+	return "", nil
 }
