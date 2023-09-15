@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"dagger.io/dagger"
 	"github.com/magefile/mage/mg"
+	"github.com/magefile/mage/target"
 )
 
 var buildContext int
@@ -38,38 +40,55 @@ type buildOptions struct {
 	version        string
 }
 
+type genAPI struct {
+	path          string
+	filename      string
+	interfaceName string
+}
+
 type binaryConfig struct {
 	configFiles       map[string]string
 	excludedPlatforms map[dagger.Platform]struct{}
 	execStmts         [][]string
 	useProto          bool
+	genAPI            *genAPI
 	buildTags         []string
+	baseImage         string
 }
 
+const (
+	beskarBinary    = "beskar"
+	beskarctlBinary = "beskarctl"
+	beskarYUMBinary = "beskar-yum"
+)
+
 var binaries = map[string]binaryConfig{
-	"beskar": {
+	beskarBinary: {
 		configFiles: map[string]string{
 			"internal/pkg/config/default/beskar.yaml": "/etc/beskar/beskar.yaml",
 		},
 		useProto:  true,
 		buildTags: []string{"include_gcs"},
 	},
-	"beskarctl": {},
-	"beskar-yum": {
-		// int/uint overflow issues with doltdb and 32 bits architectures
-		excludedPlatforms: map[dagger.Platform]struct{}{
-			"linux/arm/v6": {},
-			"linux/arm/v7": {},
-		},
+	beskarctlBinary: {},
+	beskarYUMBinary: {
 		configFiles: map[string]string{
 			"internal/pkg/config/default/beskar-yum.yaml": "/etc/beskar/beskar-yum.yaml",
 		},
 		execStmts: [][]string{
 			{
-				"apk", "add", "createrepo_c", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/",
+				//"apk", "add", "-U", "bash", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/",
+				"sh", "-c", "apt-get update -y && apt-get install -y --no-install-recommends ca-certificates createrepo-c && " +
+					"rm -rf /var/lib/apt/lists/* && rm -Rf /usr/share/doc && rm -Rf /usr/share/man && apt-get clean",
 			},
 		},
-		useProto: true,
+		genAPI: &genAPI{
+			path:          "pkg/plugins/yum/api/v1",
+			filename:      "api.go",
+			interfaceName: "YUM",
+		},
+		useProto:  true,
+		baseImage: "debian:bullseye-slim",
 	},
 }
 
@@ -88,26 +107,45 @@ func (b Build) All(ctx context.Context) error {
 
 func (b Build) Proto(ctx context.Context) error {
 	return onceCalls["proto"].call(func() error {
+		build, err := target.Dir("build/output/beskar", "api")
+		if err != nil {
+			return err
+		} else if !build {
+			return nil
+		}
 		return b.buildProto(ctx)
 	})
 }
 
 func (b Build) Beskar(ctx context.Context) error {
-	return b.build(ctx, "beskar")
+	return b.build(ctx, beskarBinary)
 }
 
 func (b Build) Beskarctl(ctx context.Context) error {
-	return b.build(ctx, "beskarctl")
+	return b.build(ctx, beskarctlBinary)
 }
 
 func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
-		mg.F(b.Plugin, "beskar-yum"),
+		mg.F(b.Plugin, beskarYUMBinary),
 	)
 }
 
 func (b Build) Plugin(ctx context.Context, name string) error {
+	binary, ok := binaries[name]
+	if !ok {
+		return fmt.Errorf("unknown plugin %s", name)
+	} else if binary.genAPI != nil {
+		build, err := target.Dir(filepath.Join("build/output", name), binary.genAPI.path)
+		if err != nil {
+			return err
+		} else if build {
+			if err := b.genAPI(ctx, name, binary.genAPI); err != nil {
+				return err
+			}
+		}
+	}
 	return b.build(ctx, name)
 }
 
@@ -192,7 +230,10 @@ func (b Build) build(ctx context.Context, name string) error {
 		}
 
 		if buildOpts.version != "" {
-			buildArgs = append(buildArgs, "-ldflags", fmt.Sprintf("-X main.Version=v%s", buildOpts.version))
+			buildArgs = append(buildArgs, "-ldflags", fmt.Sprintf("-X go.ciq.dev/beskar/pkg/version.Semver=v%s", buildOpts.version))
+		} else {
+			buildTime := time.Now().Format("20060102150405")
+			buildArgs = append(buildArgs, "-ldflags", fmt.Sprintf("-X go.ciq.dev/beskar/pkg/version.Semver=v0.0.0-dev-%s", buildTime))
 		}
 
 		if len(binaryConfig.buildTags) > 0 {
@@ -215,11 +256,16 @@ func (b Build) build(ctx context.Context, name string) error {
 				return err
 			}
 		} else {
+			baseImage := binaryConfig.baseImage
+			if baseImage == "" {
+				baseImage = BaseImage
+			}
+
 			container := client.
 				Container(dagger.ContainerOpts{
 					Platform: platform,
 				}).
-				From(BaseImage)
+				From(baseImage)
 
 			for _, execStmt := range binaryConfig.execStmts {
 				container = container.WithExec(execStmt)
@@ -349,4 +395,39 @@ func (b Build) buildProto(ctx context.Context) error {
 	}
 
 	return printOutput(ctx, protoc)
+}
+
+func (b Build) genAPI(ctx context.Context, name string, genAPI *genAPI) error {
+	fmt.Printf("Generating %s API\n", name)
+
+	client, err := getDaggerClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	src := getSource(client)
+
+	workdir := filepath.Join("/src", genAPI.path)
+	golang := client.Container().From(GoImage).
+		WithMountedDirectory("/src", src).
+		WithWorkdir(workdir).
+		With(goCache(client)).
+		WithExec([]string{"go", "install", "github.com/RussellLuo/kun/cmd/kungen@latest"}).
+		WithExec([]string{"kungen", "-force", genAPI.filename, genAPI.interfaceName})
+
+	outputDir := golang.Directory(workdir)
+	entries, err := outputDir.Entries(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry == genAPI.filename {
+			continue
+		}
+		outputDir.File(entry).Export(ctx, filepath.Join(genAPI.path, entry))
+	}
+
+	return printOutput(ctx, golang)
 }

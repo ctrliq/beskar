@@ -4,12 +4,56 @@ metadata:
   name: {{ include "beskar-yum.fullname" . }}
   labels:
     {{- include "beskar-yum.labels" . | nindent 4 }}
+{{- if .Values.service.annotations }}
+  annotations:
+{{ toYaml .Values.service.annotations | indent 4 }}
+{{- end }}
 spec:
   type: {{ .Values.service.type }}
+{{- if .Values.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.service.sessionAffinity }}
+  {{- if .Values.service.sessionAffinityConfig }}
+  sessionAffinityConfig:
+    {{ toYaml .Values.service.sessionAffinityConfig | nindent 4 }}
+  {{- end -}}
+{{- end }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: 5200
+      targetPort: {{ .Values.service.port }}
       protocol: TCP
       name: http
+  selector:
+    {{- include "beskar-yum.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "beskar-yum.fullname" . }}-gossip
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar-yum.labels" . | nindent 4 }}
+    go.ciq.dev/beskar-gossip: "true"
+{{- if .Values.gossip.annotations }}
+  annotations:
+{{ toYaml .Values.gossip.annotations | indent 4 }}
+{{- end }}
+spec:
+  type: ClusterIP
+{{- if .Values.gossip.sessionAffinity }}
+  sessionAffinity: {{ .Values.gossip.sessionAffinity }}
+  {{- if .Values.gossip.sessionAffinityConfig }}
+  sessionAffinityConfig:
+    {{ toYaml .Values.gossip.sessionAffinityConfig | nindent 4 }}
+  {{- end -}}
+{{- end }}
+  ports:
+    - port: {{ .Values.gossip.port }}
+      protocol: TCP
+      name: gossip-tcp
+      targetPort: {{ .Values.gossip.port }}
+    - port: {{ .Values.gossip.port }}
+      protocol: UDP
+      name: gossip-udp
+      targetPort: {{ .Values.gossip.port }}
   selector:
     {{- include "beskar-yum.selectorLabels" . | nindent 4 }}

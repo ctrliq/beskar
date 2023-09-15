@@ -4,23 +4,17 @@
 package main
 
 import (
-	"crypto/sha256"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/cavaliergopher/rpm"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasrpm"
+	"go.ciq.dev/beskar/pkg/version"
 )
-
-var Version = "dev"
 
 func fatal(format string, a ...any) {
 	fmt.Printf(format+"\n", a...)
@@ -28,9 +22,14 @@ func fatal(format string, a ...any) {
 }
 
 func main() {
-	pushCmd := flag.NewFlagSet("foo", flag.ExitOnError)
+	pushCmd := flag.NewFlagSet("push", flag.ExitOnError)
 	pushRepo := pushCmd.String("repo", "", "repo")
 	pushRegistry := pushCmd.String("registry", "", "registry")
+
+	pushMetadataCmd := flag.NewFlagSet("push-metadata", flag.ExitOnError)
+	pushMetadataRepo := pushMetadataCmd.String("repo", "", "repo")
+	pushMetadataRegistry := pushMetadataCmd.String("registry", "", "registry")
+	pushMetadataType := pushMetadataCmd.String("type", "", "type")
 
 	if len(os.Args) == 1 {
 		fatal("missing subcommand")
@@ -38,7 +37,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "version":
-		fmt.Println(Version)
+		fmt.Println(version.Semver)
 	case "push":
 		if err := pushCmd.Parse(os.Args[2:]); err != nil {
 			fatal("while parsing command arguments: %w", err)
@@ -54,56 +53,46 @@ func main() {
 		if err := push(rpm, *pushRepo, *pushRegistry); err != nil {
 			fatal("while pushing RPM package: %s", err)
 		}
+	case "push-metadata":
+		if err := pushMetadataCmd.Parse(os.Args[2:]); err != nil {
+			fatal("while parsing command arguments: %w", err)
+		}
+		metadata := pushMetadataCmd.Arg(0)
+		if metadata == "" {
+			fatal("a metadata file must be specified")
+		} else if pushMetadataRegistry == nil || *pushMetadataRegistry == "" {
+			fatal("a registry must be specified")
+		} else if pushMetadataRepo == nil || *pushMetadataRepo == "" {
+			fatal("a repo must be specified")
+		} else if pushMetadataType == nil || *pushMetadataType == "" {
+			fatal("a metadata type must be specified")
+		}
+		if err := pushMetadata(metadata, *pushMetadataType, *pushMetadataRepo, *pushMetadataRegistry); err != nil {
+			fatal("while pushing metadata: %s", err)
+		}
 	default:
 		fatal("unknown %q subcommand", os.Args[1])
 	}
 }
 
 func push(rpmPath string, repo, registry string) error {
-	rpmFile, err := os.Open(rpmPath)
+	pusher, err := orasrpm.NewRPMPusher(rpmPath, repo, name.WithDefaultRegistry(registry))
 	if err != nil {
-		return fmt.Errorf("while opening %s: %w", rpmPath, err)
+		return fmt.Errorf("while creating RPM pusher: %w", err)
 	}
-	defer rpmFile.Close()
 
-	pkg, err := rpm.Read(rpmFile)
+	fmt.Printf("Pushing %s to %s\n", rpmPath, pusher.Reference())
+
+	return oras.Push(pusher, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+}
+
+func pushMetadata(metadataPath string, dataType, repo, registry string) error {
+	pusher, err := orasrpm.NewRPMExtraMetadataPusher(metadataPath, repo, dataType, name.WithDefaultRegistry(registry))
 	if err != nil {
-		return fmt.Errorf("while reading %s metadata: %w", rpmPath, err)
+		return fmt.Errorf("while creating RPM metadata pusher: %w", err)
 	}
 
-	archTag := pkg.Header.GetTag(1022)
-	arch := ""
-	if archTag == nil {
-		arch = pkg.Architecture()
-	} else {
-		arch = archTag.String()
-	}
-
-	rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name(), pkg.Version(), pkg.Release(), arch)
-
-	pkgTag := fmt.Sprintf("%x", sha256.Sum256([]byte(rpmName)))
-
-	rawRef := filepath.Join(registry, "yum", repo, "packages:"+pkgTag)
-	ref, err := name.ParseReference(rawRef)
-	if err != nil {
-		return fmt.Errorf("while parsing reference %s: %w", rawRef, err)
-	}
-
-	pusher := orasrpm.NewRPMPusher(
-		ref,
-		rpmPath,
-		orasrpm.WithRPMLayerPlatform(
-			&v1.Platform{
-				Architecture: arch,
-				OS:           "linux",
-			},
-		),
-		orasrpm.WithRPMLayerAnnotations(map[string]string{
-			imagespec.AnnotationTitle: rpmName,
-		}),
-	)
-
-	fmt.Printf("Pushing %s to %s\n", rpmName, rawRef)
+	fmt.Printf("Pushing %s to %s\n", metadataPath, pusher.Reference())
 
 	return oras.Push(pusher, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 }

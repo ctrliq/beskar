@@ -18,29 +18,33 @@ import (
 // that simply checks for a non-empty Authorization header. It is useful for
 // demonstration and testing.
 type accessController struct {
-	hashPassword []byte
+	hashPassword   []byte
+	hashedHostname string
 }
 
 var _ auth.AccessController = &accessController{}
 
-func newAccessController(options map[string]interface{}) (auth.AccessController, error) {
-	account, ok := options["account"]
-	if !ok {
-		return nil, fmt.Errorf("account with hashed password is missing: htpasswd bcrypt format expected")
-	}
-	htpasswdEntry, ok := account.(string)
-	if !ok || htpasswdEntry == "" {
-		return nil, fmt.Errorf("account with hashed password is missing or badly formatted: htpasswd bcrypt format expected")
-	}
+func newAccessController(hashedHostname string) auth.InitFunc {
+	return func(options map[string]interface{}) (auth.AccessController, error) {
+		account, ok := options["account"]
+		if !ok {
+			return nil, fmt.Errorf("account with hashed password is missing: htpasswd bcrypt format expected")
+		}
+		htpasswdEntry, ok := account.(string)
+		if !ok || htpasswdEntry == "" {
+			return nil, fmt.Errorf("account with hashed password is missing or badly formatted: htpasswd bcrypt format expected")
+		}
 
-	idx := strings.Index(htpasswdEntry, ":")
-	if idx == -1 || idx >= len(htpasswdEntry) {
-		return nil, fmt.Errorf("account with hashed password is missing or badly formatted: htpasswd bcrypt format expected")
-	}
+		idx := strings.Index(htpasswdEntry, ":")
+		if idx == -1 || idx >= len(htpasswdEntry) {
+			return nil, fmt.Errorf("account with hashed password is missing or badly formatted: htpasswd bcrypt format expected")
+		}
 
-	return &accessController{
-		hashPassword: []byte(htpasswdEntry[idx+1:]),
-	}, nil
+		return &accessController{
+			hashPassword:   []byte(htpasswdEntry[idx+1:]),
+			hashedHostname: hashedHostname,
+		}, nil
+	}
 }
 
 // Authorized simply checks for the existence of the authorization header,
@@ -71,6 +75,8 @@ func (ac *accessController) Authorized(ctx context.Context, accessRecords ...aut
 	}
 
 	if !requireAuthentication {
+		return ctx, nil
+	} else if req.TLS != nil && req.TLS.ServerName == ac.hashedHostname {
 		return ctx, nil
 	}
 

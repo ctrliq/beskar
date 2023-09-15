@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package beskar.api.plugin.v1;
+
+option go_package = "go.ciq.dev/beskar/pkg/api/plugin/v1;pluginv1";
+
+message Router {
+  bytes rego = 1;
+  bytes data = 2;
+}
+
+// Info defines plugin information returned by the plugin info endpoint.
+message Info {
+  string prefix = 1;
+  repeated string mediatypes = 2;
+  string version = 3;
+  string name = 4;
+  Router router = 5;
+}

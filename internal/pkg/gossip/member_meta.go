@@ -8,9 +8,26 @@ import (
 	"encoding/gob"
 )
 
+type InstanceType uint8
+
+const (
+	BeskarInstance InstanceType = iota + 1
+	PluginInstance
+)
+
 type BeskarMeta struct {
-	// Cache port.
-	CachePort uint16
+	// Beskar or plugin instance.
+	InstanceType InstanceType
+	// Ready state
+	Ready bool
+	// Groupcache service port for beskar instances or HTTP service for plugin instances.
+	ServicePort uint16
+	// Registry service port for beskar instances.
+	RegistryPort uint16
+	// Hostname, provided as part of metadata as gossip is randomizing node name,
+	// for beskar instances it will return the configured hostname, for plugins it returns
+	// the node hostname
+	Hostname string
 }
 
 func NewBeskarMeta() *BeskarMeta {

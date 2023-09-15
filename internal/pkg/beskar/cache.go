@@ -8,10 +8,12 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/reference"
 	"github.com/mailgun/groupcache/v2"
 	"github.com/opencontainers/go-digest"
 )
@@ -58,11 +60,8 @@ func (ms *ManifestSink) ToManifest() (distribution.Manifest, error) {
 	}
 
 	manifest, _, err := distribution.UnmarshalManifest(gm.MediaType, gm.Payload)
-	if err != nil {
-		return nil, err
-	}
 
-	return manifest, nil
+	return manifest, err
 }
 
 type gobManifest struct {
@@ -84,24 +83,63 @@ func encodeManifest(mediaType string, payload []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-type cacheGetter struct{}
+type cacheGetter struct {
+	registry distribution.Namespace
+}
 
-func (cacheGetter) Get(ctx context.Context, key string, dest groupcache.Sink) error {
-	manifestSink, ok := dest.(*ManifestSink)
-	if !ok {
-		return nil
-	}
-
+func (cg cacheGetter) Get(ctx context.Context, key string, dest groupcache.Sink) error {
 	idx := strings.Index(key, "@")
 	if idx < 0 || idx+1 == len(key) {
-		return fmt.Errorf("wrong cache key format")
+		return &groupcache.ErrNotFound{Msg: "wrong cache key format"}
 	}
+
 	dgst := digest.Digest(key[idx+1:])
 
-	manifest, err := manifestSink.manifestService.Get(ctx, dgst, manifestSink.options...)
+	// local
+	if manifestSink, ok := dest.(*ManifestSink); ok {
+		manifest, err := manifestSink.manifestService.Get(ctx, dgst, manifestSink.options...)
+		if err != nil {
+			return &groupcache.ErrNotFound{Msg: err.Error()}
+		}
+		return manifestSink.FromManifest(manifest)
+	}
+
+	// remote
+
+	path, err := url.PathUnescape(key[:idx])
 	if err != nil {
 		return err
 	}
 
-	return manifestSink.FromManifest(manifest)
+	rn, err := reference.WithName(path)
+	if err != nil {
+		return err
+	}
+
+	repo, err := cg.registry.Repository(ctx, rn)
+	if err != nil {
+		return err
+	}
+
+	ms, err := repo.Manifests(ctx)
+	if err != nil {
+		return err
+	}
+
+	manifest, err := ms.Get(ctx, dgst)
+	if err != nil {
+		return &groupcache.ErrNotFound{Msg: err.Error()}
+	}
+
+	mt, payload, err := manifest.Payload()
+	if err != nil {
+		return err
+	}
+
+	value, err := encodeManifest(mt, payload)
+	if err != nil {
+		return err
+	}
+
+	return dest.SetBytes(value, time.Now().Add(1*time.Hour))
 }

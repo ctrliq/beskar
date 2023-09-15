@@ -59,9 +59,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 - name: BESKAR_GOSSIP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ template "beskar.fullname" . }}-secret
+      name: beskar-gossip-secret
       key: gossipKey
-
+- name: BESKAR_REGISTRY_HTTP_ADDR
+  value: {{ printf ":%v" .Values.services.registry.port | quote }}
+- name: BESKAR_REGISTRY_HTTP_DEBUG_ADDR
+  value: {{ printf ":%v" .Values.metrics.port | quote }}
+- name: BESKAR_GOSSIP_ADDR
+  value: {{ printf ":%v" .Values.services.gossip.port | quote }}
+- name: BESKAR_CACHE_ADDR
+  value: {{ printf ":%v" .Values.services.groupcache.port | quote }}
+- name: BESKAR_HOSTNAME
+  value: {{ template "beskar.fullname" . }}
 {{- if .Values.secrets.htpasswd }}
 - name: BESKAR_REGISTRY_AUTH
   value: "htpasswd"
@@ -270,16 +279,5 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- with .Values.extraVolumes }}
 {{ toYaml . }}
-{{- end }}
-{{- end -}}
-
-{{- define "beskar.plugins" -}}
-plugins:
-{{- if .Values.plugins.yum.enabled }}
-  yum:
-    prefix: /yum
-    mediatype: application/vnd.ciq.rpm-package.v1.config+json
-    backends:
-    - url: {{ .Values.plugins.yum.url }}
 {{- end }}
 {{- end -}}

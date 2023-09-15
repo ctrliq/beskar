@@ -10,13 +10,13 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/distribution/distribution/v3/registry/listener"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/s3-aws"
 	"go.ciq.dev/beskar/internal/pkg/beskar"
 	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/pkg/sighandler"
+	"go.ciq.dev/beskar/pkg/version"
 )
-
-var Version = "dev"
 
 var configDir string
 
@@ -30,12 +30,20 @@ func serve(beskarCmd *flag.FlagSet) error {
 		return fmt.Errorf("while parsing configuration: %w", err)
 	}
 
+	ln, err := listener.NewListener(
+		beskarConfig.Registry.HTTP.Net,
+		beskarConfig.Registry.HTTP.Addr,
+	)
+	if err != nil {
+		return err
+	}
+
 	ctx, beskarRegistry, err := beskar.New(beskarConfig)
 	if err != nil {
 		return fmt.Errorf("while initializing server: %w", err)
 	}
 
-	return beskarRegistry.Serve(ctx)
+	return beskarRegistry.Serve(ctx, ln)
 }
 
 func gc(beskarGCCmd *flag.FlagSet) error {
@@ -64,7 +72,7 @@ func gc(beskarGCCmd *flag.FlagSet) error {
 		errCh <- beskar.RunGC(ctx, beskarConfig, dryRun, removeUntagged)
 	}()
 
-	return wait()
+	return wait(true)
 }
 
 func main() {
@@ -85,7 +93,7 @@ func main() {
 			log.Fatal(err)
 		}
 	case "version":
-		fmt.Println(Version)
+		fmt.Println(version.Semver)
 	default:
 		if err := serve(beskarGCCmd); err != nil {
 			log.Fatal(err)

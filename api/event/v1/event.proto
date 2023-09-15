@@ -2,16 +2,22 @@ syntax = "proto3";
 
 package beskar.api.event.v1;
 
-option go_package = "go.ciq.dev/beskar/pkg/api/event/v1;event";
+option go_package = "go.ciq.dev/beskar/pkg/api/event/v1;eventv1";
 
-message ManifestEvent {
-  string digest = 1;
-  string repository = 2;
-  string mediatype = 3;
-  bytes payload = 4;
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_PUT = 1;
+  ACTION_DELETE = 2;
+  ACTION_START = 3;
+  ACTION_STOP = 4;
 }
 
-message ManifestDeleteEvent {
-  string digest = 1;
-  string repository = 2;
+// EventPayload defines an event payload.
+message EventPayload {
+  // repository is required for all actions
+  string repository = 1;
+  string digest = 2;
+  string mediatype = 3;
+  bytes payload = 4;
+  Action action = 5;
 }

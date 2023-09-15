@@ -36,8 +36,17 @@ securityContext: {}
   # runAsUser: 1000
 
 service:
+  # sessionAffinity: None
+  # sessionAffinityConfig: {}
   type: ClusterIP
   port: 5200
+  annotations: {}
+
+gossip:
+  # sessionAffinity: None
+  # sessionAffinityConfig: {}
+  port: 5201
+  annotations: {}
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -99,8 +108,12 @@ configData:
   profiling: false
   datadir: /tmp/beskar-yum
 
-  registry:
-    url: http://release-beskar:5000
+  log:
+    level: debug
+    format: json
+
+  gossip:
+    addr: :5201
 
   storage:
     driver: filesystem

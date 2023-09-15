@@ -36,34 +36,13 @@ type Gossip struct {
 	Peers []string `yaml:"peers"`
 }
 
-type PluginMTLS struct {
-	Enabled bool   `yaml:"enabled"`
-	CA      string `yaml:"ca-cert"`
-	CAKey   string `yaml:"ca-key"`
-}
-
-type PluginBackend struct {
-	URL  string     `yaml:"url"`
-	MTLS PluginMTLS `yaml:"mtls"`
-}
-
-type Plugin struct {
-	Prefix    string          `yaml:"prefix"`
-	Mediatype string          `yaml:"mediatype"`
-	Backends  []PluginBackend `yaml:"backends"`
-}
-
 type BeskarConfig struct {
 	Version   string                       `yaml:"version"`
 	Profiling bool                         `yaml:"profiling"`
+	Hostname  string                       `yaml:"hostname"`
 	Cache     Cache                        `yaml:"cache"`
 	Gossip    Gossip                       `yaml:"gossip"`
-	Plugins   map[string]Plugin            `yaml:"plugins"`
 	Registry  *configuration.Configuration `yaml:"registry"`
-}
-
-func (bc *BeskarConfig) RunInKubernetes() bool {
-	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
 type BeskarConfigV1 BeskarConfig

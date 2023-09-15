@@ -27,7 +27,7 @@ type GroupCache struct {
 	pool      *groupcache.HTTPPool
 	groups    map[string]*groupcache.Group
 	self      string
-	server    http.Server
+	server    *http.Server
 }
 
 func NewCache(self string, options *groupcache.HTTPPoolOptions) *GroupCache {
@@ -58,7 +58,7 @@ func (gc *GroupCache) Start(tlsConfig *tls.Config) error {
 		return err
 	}
 	ln = tls.NewListener(ln, tlsConfig)
-	gc.server = http.Server{
+	gc.server = &http.Server{
 		Handler:           gc.pool,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

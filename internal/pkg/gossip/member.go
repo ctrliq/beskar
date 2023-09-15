@@ -21,6 +21,8 @@ type Member struct {
 const (
 	// DefaultLeaveTimeout is the time to wait during while leaving cluster
 	DefaultLeaveTimeout = 5 * time.Second
+	// DefaultReadyTimeout is the time to wait during ready status update
+	DefaultReadyTimeout = 2 * time.Second
 )
 
 // NewMember creates and/or participates to a gossip cluster.
@@ -29,7 +31,7 @@ func NewMember(name string, peers []string, memberOpt ...MemberOption) (*Member,
 	cfg.BindPort = 0
 	cfg.Name = name
 
-	eventChan := make(chan MemberEvent, 16)
+	eventChan := make(chan MemberEvent, 128)
 	nd := &nodeDelegate{
 		eventChan: eventChan,
 	}
@@ -118,6 +120,21 @@ func (member *Member) LocalNode() *memberlist.Node {
 // Send senda message to a particular node.
 func (member *Member) Send(node *memberlist.Node, msg []byte) error {
 	return member.ml.SendReliable(node, msg)
+}
+
+// MarkAsReady updates node metadata ready status and advertise nodes about change.
+func (member *Member) MarkAsReady(timeout time.Duration) error {
+	meta := NewBeskarMeta()
+	if err := meta.Decode(member.nd.meta); err != nil {
+		return fmt.Errorf("while decoding metadata")
+	}
+	meta.Ready = true
+	mb, err := meta.Encode()
+	if err != nil {
+		return err
+	}
+	member.nd.meta = mb
+	return member.ml.UpdateNode(timeout)
 }
 
 // PeerState returns the state of the peer used to join the cluster if any.

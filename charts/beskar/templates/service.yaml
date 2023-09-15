@@ -31,7 +31,7 @@ spec:
     - port: {{ .Values.services.registry.port }}
       protocol: TCP
       name: {{ if .Values.tlsSecretName }}https{{ else }}http{{ end }}-{{ .Values.services.registry.port }}
-      targetPort: 5000
+      targetPort: {{ .Values.services.registry.port }}
 {{- if (and (eq .Values.services.registry.type "NodePort") (not (empty .Values.services.registry.nodePort))) }}
       nodePort: {{ .Values.services.registry.nodePort }}
 {{- end }}
@@ -39,7 +39,7 @@ spec:
     - port: {{ .Values.metrics.port }}
       protocol: TCP
       name: http-metrics
-      targetPort: {{ (split ":" .Values.configData.registry.http.debug.addr)._1 }}
+      targetPort: {{ .Values.metrics.port }}
 {{- end }}
   selector:
     {{- include "beskar.selectorLabels" . | nindent 4 }}
@@ -69,11 +69,11 @@ spec:
     - port: {{ .Values.services.gossip.port }}
       protocol: TCP
       name: gossip-tcp
-      targetPort: 5002
+      targetPort: {{ .Values.services.gossip.port }}
     - port: {{ .Values.services.gossip.port }}
       protocol: UDP
       name: gossip-udp
-      targetPort: 5002
+      targetPort: {{ .Values.services.gossip.port }}
   selector:
     {{- include "beskar.selectorLabels" . | nindent 4 }}
 ---
@@ -101,6 +101,6 @@ spec:
     - port: {{ .Values.services.groupcache.port }}
       protocol: TCP
       name: groupcache
-      targetPort: 5003
+      targetPort: {{ .Values.services.groupcache.port }}
   selector:
     {{- include "beskar.selectorLabels" . | nindent 4 }}
