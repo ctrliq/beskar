@@ -22,4 +22,6 @@ func TestParseBeskarConfig(t *testing.T) {
 	require.Equal(t, "0.0.0.0:5102", bc.Gossip.Addr)
 	require.Equal(t, "XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=", bc.Gossip.Key)
 	require.Equal(t, []string{}, bc.Gossip.Peers)
+
+	require.Equal(t, "localhost", bc.Hostname)
 }

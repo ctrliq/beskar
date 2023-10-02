@@ -191,11 +191,6 @@ configData:
         interval: 10s
         threshold: 3
 
-plugins:
-  yum:
-    enabled: true
-    url: http://release-beskar-yum:5200
-
 podSecurityContext:
   runAsUser: 1000
   fsGroup: 1000

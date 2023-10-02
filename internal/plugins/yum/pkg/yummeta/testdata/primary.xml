@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="2">
+<package type="rpm">
+  <name>NetworkManager-initscripts-updown</name>
+  <arch>noarch</arch>
+  <version epoch="1" ver="1.40.16" rel="3.el8_8"/>
+  <checksum type="sha256" pkgid="YES">7e6e14dc80f29ab22894c3f854fedd4973546c1713d98c6897b25b7d728f50fa</checksum>
+  <summary>Legacy ifup/ifdown scripts for NetworkManager that replace initscripts (network-scripts)</summary>
+  <description>Installs alternative ifup/ifdown scripts that talk to NetworkManager.
+This is only for backward compatibility with initscripts (network-scripts).
+Preferably use nmcli instead.</description>
+  <packager>infrastructure@rockylinux.org</packager>
+  <url>https://networkmanager.dev/</url>
+  <time file="1687920895" build="1687919918"/>
+  <size package="145088" installed="2155" archive="2552"/>
+  <location href="Packages/n/NetworkManager-initscripts-updown-1.40.16-3.el8_8.noarch.rpm"/>
+  <format>
+    <rpm:license>GPLv2+ and LGPLv2+</rpm:license>
+    <rpm:vendor>Rocky</rpm:vendor>
+    <rpm:group>System Environment/Base</rpm:group>
+    <rpm:buildhost>ord1-prod-x86build003.svc.aws.rockylinux.org</rpm:buildhost>
+    <rpm:sourcerpm>NetworkManager-1.40.16-3.el8_8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="144284"/>
+    <rpm:provides>
+      <rpm:entry name="NetworkManager-initscripts-updown" flags="EQ" epoch="1" ver="1.40.16" rel="3.el8_8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="/bin/bash"/>
+      <rpm:entry name="/bin/sh" pre="1"/>
+      <rpm:entry name="/bin/sh"/>
+      <rpm:entry name="/usr/bin/nmcli"/>
+      <rpm:entry name="NetworkManager"/>
+    </rpm:requires>
+    <rpm:obsoletes>
+      <rpm:entry name="NetworkManager" flags="LT" epoch="1" ver="1.36.0" rel="0.6"/>
+    </rpm:obsoletes>
+    <file type="ghost">/usr/sbin/ifdown</file>
+    <file type="ghost">/usr/sbin/ifup</file>
+  </format>
+</package>
+<package type="rpm">
+  <name>NetworkManager-initscripts-updown</name>
+  <arch>noarch</arch>
+  <version epoch="1" ver="1.40.16" rel="4.el8_8"/>
+  <checksum type="sha256" pkgid="YES">0cf9f96f80808ca6ce9804779d9efc64cc564c8b7cbb98afc5c5f1315e7340cd</checksum>
+  <summary>Legacy ifup/ifdown scripts for NetworkManager that replace initscripts (network-scripts)</summary>
+  <description>Installs alternative ifup/ifdown scripts that talk to NetworkManager.
+This is only for backward compatibility with initscripts (network-scripts).
+Preferably use nmcli instead.</description>
+  <packager>infrastructure@rockylinux.org</packager>
+  <url>https://networkmanager.dev/</url>
+  <time file="1691523945" build="1691523116"/>
+  <size package="145180" installed="2155" archive="2552"/>
+  <location href="Packages/n/NetworkManager-initscripts-updown-1.40.16-4.el8_8.noarch.rpm"/>
+  <format>
+    <rpm:license>GPLv2+ and LGPLv2+</rpm:license>
+    <rpm:vendor>Rocky</rpm:vendor>
+    <rpm:group>System Environment/Base</rpm:group>
+    <rpm:buildhost>ord1-prod-x86build003.svc.aws.rockylinux.org</rpm:buildhost>
+    <rpm:sourcerpm>NetworkManager-1.40.16-4.el8_8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="144376"/>
+    <rpm:provides>
+      <rpm:entry name="NetworkManager-initscripts-updown" flags="EQ" epoch="1" ver="1.40.16" rel="4.el8_8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="/bin/bash"/>
+      <rpm:entry name="/bin/sh" pre="1"/>
+      <rpm:entry name="/bin/sh"/>
+      <rpm:entry name="/usr/bin/nmcli"/>
+      <rpm:entry name="NetworkManager"/>
+    </rpm:requires>
+    <rpm:obsoletes>
+      <rpm:entry name="NetworkManager" flags="LT" epoch="1" ver="1.36.0" rel="0.6"/>
+    </rpm:obsoletes>
+    <file type="ghost">/usr/sbin/ifdown</file>
+    <file type="ghost">/usr/sbin/ifup</file>
+  </format>
+</package>
+</metadata>

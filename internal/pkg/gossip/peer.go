@@ -9,8 +9,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -25,35 +25,37 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+var runInKubernetes = os.Getenv("KUBERNETES_SERVICE_HOST") != ""
+
 const (
 	GossipLabelKey = "go.ciq.dev/beskar-gossip"
 	namespaceFile  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
-func Start(beskarConfig *config.BeskarConfig, client kubernetes.Interface, timeout time.Duration) (*Member, error) {
+func Start(gossipConfig config.Gossip, meta *BeskarMeta, client kubernetes.Interface, timeout time.Duration) (*Member, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
 	}
 
-	peers, err := getPeers(beskarConfig, client, timeout)
+	peers, err := getPeers(gossipConfig, client, timeout)
 	if err != nil {
 		return nil, err
 	}
-	key, err := getKey(beskarConfig)
+	key, err := getKey(gossipConfig)
 	if err != nil {
 		return nil, err
 	}
-	meta, err := getMeta(beskarConfig)
+	nodeMeta, err := meta.Encode()
 	if err != nil {
 		return nil, err
 	}
-	state, err := getState(beskarConfig, len(peers))
+	state, err := getState(len(peers))
 	if err != nil {
 		return nil, err
 	}
 
-	host, port, err := net.SplitHostPort(beskarConfig.Gossip.Addr)
+	host, port, err := net.SplitHostPort(gossipConfig.Addr)
 	if err != nil {
 		return nil, err
 	} else if host == "" {
@@ -65,34 +67,17 @@ func Start(beskarConfig *config.BeskarConfig, client kubernetes.Interface, timeo
 		peers,
 		WithBindAddress(net.JoinHostPort(host, port)),
 		WithSecretKey(key),
-		WithNodeMeta(meta),
+		WithNodeMeta(nodeMeta),
 		WithLocalState(state),
 	)
 }
 
-func getKey(beskarConfig *config.BeskarConfig) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(beskarConfig.Gossip.Key)
+func getKey(gossipConfig config.Gossip) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(gossipConfig.Key)
 }
 
-func getMeta(beskarConfig *config.BeskarConfig) ([]byte, error) {
-	_, port, err := net.SplitHostPort(beskarConfig.Cache.Addr)
-	if err != nil {
-		return nil, err
-	}
-
-	meta := NewBeskarMeta()
-	cachePort, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return nil, fmt.Errorf("while parsing cache address: %w", err)
-	}
-
-	meta.CachePort = uint16(cachePort)
-
-	return meta.Encode()
-}
-
-func getState(beskarConfig *config.BeskarConfig, numPeers int) ([]byte, error) {
-	if numPeers == 0 || !beskarConfig.RunInKubernetes() {
+func getState(numPeers int) ([]byte, error) {
+	if numPeers == 0 || !runInKubernetes {
 		caCert, caKey, err := mtls.GenerateCA("beskar", time.Now().AddDate(10, 0, 0), mtls.ECDSAKey)
 		if err != nil {
 			return nil, err
@@ -105,9 +90,9 @@ func getState(beskarConfig *config.BeskarConfig, numPeers int) ([]byte, error) {
 	return nil, nil
 }
 
-func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, timeout time.Duration) ([]string, error) {
-	if !beskarConfig.RunInKubernetes() {
-		return beskarConfig.Gossip.Peers, nil
+func getPeers(gossipConfig config.Gossip, client kubernetes.Interface, timeout time.Duration) ([]string, error) {
+	if !runInKubernetes {
+		return gossipConfig.Peers, nil
 	}
 
 	data, err := os.ReadFile(namespaceFile)
@@ -148,9 +133,8 @@ func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, ti
 			return fmt.Errorf("while listing endpoints: %w", err)
 		}
 
-		var subsetIPs []string
-		gossipPort := int32(0)
-		peers = nil
+		var subsetIPs []netip.AddrPort
+		gossipPort := uint16(0)
 
 		for _, ep := range endpointList.Items {
 			for _, subset := range ep.Subsets {
@@ -158,11 +142,15 @@ func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, ti
 					if port.Protocol != v1.ProtocolTCP {
 						continue
 					}
-					gossipPort = port.Port
+					gossipPort = uint16(port.Port)
 					break
 				}
 				for _, address := range subset.Addresses {
-					subsetIPs = append(subsetIPs, address.IP)
+					addr, err := netip.ParseAddr(address.IP)
+					if err != nil {
+						continue
+					}
+					subsetIPs = append(subsetIPs, netip.AddrPortFrom(addr, gossipPort))
 				}
 			}
 		}
@@ -171,12 +159,13 @@ func getPeers(beskarConfig *config.BeskarConfig, client kubernetes.Interface, ti
 			return fmt.Errorf("no gossip port found")
 		}
 
+		peers = nil
+
 		for _, ip := range subsetIPs {
-			if ip == podIP {
+			if ip.Addr().String() == podIP {
 				continue
 			}
-			peer := net.JoinHostPort(ip, fmt.Sprintf("%d", gossipPort))
-			peers = append(peers, peer)
+			peers = append(peers, ip.String())
 		}
 
 		if len(subsetIPs) == 0 {

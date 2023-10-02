@@ -12,5 +12,5 @@ import (
 
 type ManifestEventHandler interface {
 	Put(context.Context, distribution.Repository, digest.Digest, string, []byte) error
-	Delete(context.Context, digest.Digest) error
+	Delete(context.Context, distribution.Repository, digest.Digest, string, []byte) error
 }

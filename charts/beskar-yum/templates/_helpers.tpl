@@ -62,17 +62,11 @@ Create the name of the service account to use
 {{- end }}
 
 {{- define "beskar-yum.envs" -}}
-- name: BESKARYUM_REGISTRY_USERNAME
+- name: BESKARYUM_GOSSIP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ template "beskar-yum.fullname" . }}-secret
-      key: registryUsername
-- name: BESKARYUM_REGISTRY_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ template "beskar-yum.fullname" . }}-secret
-      key: registryPassword
-
+      name: beskar-gossip-secret
+      key: gossipKey
 {{- if eq .Values.configData.storage.driver "filesystem" }}
 - name: BESKARYUM_STORAGE_FILESYSTEM_DIRECTORY
   value: {{ .Values.configData.storage.filesystem.directory }}

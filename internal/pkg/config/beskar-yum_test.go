@@ -15,15 +15,11 @@ func TestParseBeskarYumConfig(t *testing.T) {
 
 	require.Equal(t, "1.0", bc.Version)
 
-	require.Equal(t, "127.0.0.1:5200", bc.Addr)
+	require.Equal(t, "0.0.0.0:5200", bc.Addr)
 
 	require.Equal(t, true, bc.Profiling)
 
 	require.Equal(t, "/tmp/beskar-yum", bc.DataDir)
-
-	require.Equal(t, "http://127.0.0.1:5100", bc.Registry.URL)
-	require.Equal(t, "beskar", bc.Registry.Username)
-	require.Equal(t, "beskar", bc.Registry.Password)
 
 	require.Equal(t, "filesystem", bc.Storage.Driver)
 	require.Equal(t, "", bc.Storage.Prefix)
@@ -44,4 +40,11 @@ func TestParseBeskarYumConfig(t *testing.T) {
 	require.Equal(t, "beskar-yum", bc.Storage.Azure.Container)
 	require.Equal(t, "account_name", bc.Storage.Azure.AccountName)
 	require.Equal(t, "base64_encoded_account_key", bc.Storage.Azure.AccountKey)
+
+	require.Equal(t, "debug", bc.Log.Level)
+	require.Equal(t, "json", bc.Log.Format)
+
+	require.Equal(t, "0.0.0.0:5201", bc.Gossip.Addr)
+	require.Equal(t, "XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=", bc.Gossip.Key)
+	require.Equal(t, []string{"127.0.0.1:5102"}, bc.Gossip.Peers)
 }

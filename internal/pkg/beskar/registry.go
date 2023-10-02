@@ -6,18 +6,19 @@ package beskar
 import (
 	"bytes"
 	"context"
+	"crypto/md5" //nolint:gosec
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"reflect"
 	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/configuration"
 	dcontext "github.com/distribution/distribution/v3/context"
-	"github.com/distribution/distribution/v3/reference"
 	"github.com/distribution/distribution/v3/registry"
 	"github.com/distribution/distribution/v3/registry/auth"
 	"github.com/distribution/distribution/v3/version"
@@ -27,8 +28,10 @@ import (
 	"github.com/mailgun/groupcache/v2"
 	"github.com/opencontainers/go-digest"
 	"go.ciq.dev/beskar/internal/pkg/cache"
+	"go.ciq.dev/beskar/internal/pkg/cmux"
 	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/internal/pkg/gossip"
+	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/mtls"
 	"go.ciq.dev/beskar/pkg/netutil"
 	"go.ciq.dev/beskar/pkg/sighandler"
@@ -47,10 +50,10 @@ type Registry struct {
 	registry      distribution.Namespace
 	beskarConfig  *config.BeskarConfig
 	router        *mux.Router
-	server        *registry.Registry
+	server        *http.Server
 	member        *gossip.Member
 	manifestCache *cache.GroupCache
-	proxyPlugins  map[string]*proxyPlugin
+	pluginManager *pluginManager
 	errCh         chan error
 	logger        dcontext.Logger
 	wait          sighandler.WaitFunc
@@ -59,7 +62,6 @@ type Registry struct {
 func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) {
 	beskarRegistry := &Registry{
 		beskarConfig: beskarConfig,
-		proxyPlugins: make(map[string]*proxyPlugin),
 		errCh:        make(chan error, 1),
 	}
 
@@ -68,31 +70,39 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 
 	ctx = dcontext.WithVersion(ctx, version.Version)
 
-	registryCh, err := registerRegistryMiddleware(beskarRegistry, beskarRegistry.initCacheFunc)
+	registryCh, err := registerRegistryMiddleware(beskarRegistry)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := auth.Register("beskar", auth.InitFunc(newAccessController)); err != nil {
+	if err := auth.Register("beskar", newAccessController(beskarRegistry.getHashedHostname())); err != nil {
 		return nil, nil, err
 	}
 
 	beskarRegistry.router = mux.NewRouter()
+	// for probes
+	beskarRegistry.router.Handle("/", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
-	registry.RegisterHandler(func(config *configuration.Configuration, handler http.Handler) http.Handler {
-		beskarRegistry.router.NotFoundHandler = handler
-		return beskarRegistry.router
-	})
-
-	beskarRegistry.server, err = registry.NewRegistry(ctx, beskarConfig.Registry)
+	registryServer, err := registry.NewRegistry(ctx, beskarConfig.Registry)
 	if err != nil {
 		return nil, nil, err
 	}
 	beskarRegistry.registry = <-registryCh
 
+	reflectServer := reflect.ValueOf(registryServer).Elem().FieldByName("server")
+	if reflectServer.IsZero() || reflectServer.IsNil() {
+		return nil, nil, fmt.Errorf("no http.Server found in registry struct")
+	}
+	reflectServer = reflect.NewAt(reflectServer.Type(), reflectServer.Addr().UnsafePointer()).Elem()
+	server, ok := reflectServer.Interface().(*http.Server)
+	if !ok {
+		return nil, nil, fmt.Errorf("no http.Server found")
+	}
+
+	beskarRegistry.server = server
 	beskarRegistry.logger = dcontext.GetLogger(ctx)
 
-	if err := initPlugins(ctx, beskarRegistry); err != nil {
+	if err := initPlugins(ctx); err != nil {
 		return nil, nil, err
 	}
 
@@ -114,33 +124,33 @@ func (br *Registry) setProfiling() {
 	br.router.Handle("/debug/pprof/{cmd}", http.HandlerFunc(pprof.Index)) // special handling for Gorilla mux
 }
 
-func (br *Registry) listBeskarTags(ctx context.Context) ([]string, error) {
-	rn, err := reference.WithName("beskar")
-	if err != nil {
-		return nil, err
-	}
-
-	repo, err := br.registry.Repository(ctx, rn)
-	if err != nil {
-		return nil, err
-	}
-
-	tags, err := repo.Tags(ctx).All(ctx)
-	if err != nil {
-		//nolint:errorlint // error is not wrapped
-		if _, ok := err.(distribution.ErrRepositoryUnknown); !ok {
-			return nil, err
-		}
-	}
-
-	return tags, nil
-}
-
 func (br *Registry) startGossipWatcher() {
 	self := br.member.LocalNode()
 
 	for event := range br.member.Watch() {
 		switch event.EventType {
+		case gossip.NodeUpdate:
+			node, ok := event.Arg.(*memberlist.Node)
+			if !ok || self.Name == node.Name {
+				continue
+			}
+
+			if self.Port != node.Port || !self.Addr.Equal(node.Addr) {
+				meta := gossip.NewBeskarMeta()
+				if err := meta.Decode(node.Meta); err == nil && meta.Ready {
+					switch meta.InstanceType {
+					case gossip.BeskarInstance:
+						peer := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.ServicePort)))
+						br.manifestCache.AddPeer(fmt.Sprintf("https://%s", peer), node.Name)
+						br.logger.Debugf("Added groupcache peer %s", peer)
+					case gossip.PluginInstance:
+						br.logger.Infof("Register plugin")
+						if err := br.pluginManager.register(node, meta); err != nil {
+							br.logger.Errorf("plugin register error: %s", err)
+						}
+					}
+				}
+			}
 		case gossip.NodeJoin:
 			node, ok := event.Arg.(*memberlist.Node)
 			if !ok || self.Name == node.Name {
@@ -151,10 +161,18 @@ func (br *Registry) startGossipWatcher() {
 
 			if self.Port != node.Port || !self.Addr.Equal(node.Addr) {
 				meta := gossip.NewBeskarMeta()
-				if err := meta.Decode(node.Meta); err == nil {
-					peer := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.CachePort)))
-					br.manifestCache.AddPeer(fmt.Sprintf("https://%s", peer), node.Name)
-					br.logger.Debugf("Added groupcache peer %s", peer)
+				if err := meta.Decode(node.Meta); err == nil && meta.Ready {
+					switch meta.InstanceType {
+					case gossip.BeskarInstance:
+						peer := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.ServicePort)))
+						br.manifestCache.AddPeer(fmt.Sprintf("https://%s", peer), node.Name)
+						br.logger.Debugf("Added groupcache peer %s", peer)
+					case gossip.PluginInstance:
+						br.logger.Infof("Register plugin")
+						if err := br.pluginManager.register(node, meta); err != nil {
+							br.logger.Errorf("plugin register error: %s", err)
+						}
+					}
 				}
 			}
 		case gossip.NodeLeave:
@@ -167,22 +185,50 @@ func (br *Registry) startGossipWatcher() {
 
 			if self.Port != node.Port || !self.Addr.Equal(node.Addr) {
 				meta := gossip.NewBeskarMeta()
-				if err := meta.Decode(node.Meta); err == nil {
-					peer := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.CachePort)))
-					br.manifestCache.RemovePeer(fmt.Sprintf("https://%s", peer), node.Name)
-					br.logger.Debugf("Removed groupcache peer %s", peer)
+				if err := meta.Decode(node.Meta); err == nil && meta.Ready {
+					switch meta.InstanceType {
+					case gossip.BeskarInstance:
+						peer := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.ServicePort)))
+						br.manifestCache.RemovePeer(fmt.Sprintf("https://%s", peer), node.Name)
+						br.logger.Debugf("Removed groupcache peer %s", peer)
+					case gossip.PluginInstance:
+						br.logger.Infof("Unregister plugin")
+						br.pluginManager.unregister(node, meta)
+					}
 				}
 			}
 		}
 	}
 }
 
-func (br *Registry) initCacheFunc() (_ *groupcache.Group, errFn error) {
-	var err error
+func (br *Registry) initGossip() (_ *mtls.CAPEM, errFn error) {
+	br.logger.Info("Initializing gossip")
 
-	br.logger.Info("Initializing gossip and groupcache")
+	_, port, err := net.SplitHostPort(br.beskarConfig.Cache.Addr)
+	if err != nil {
+		return nil, err
+	}
+	cachePort, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return nil, err
+	}
 
-	br.member, err = gossip.Start(br.beskarConfig, nil, 300*time.Second)
+	_, port, err = net.SplitHostPort(br.beskarConfig.Registry.HTTP.Addr)
+	if err != nil {
+		return nil, err
+	}
+	registryPort, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	meta := gossip.NewBeskarMeta()
+	meta.ServicePort = uint16(cachePort)
+	meta.RegistryPort = uint16(registryPort)
+	meta.InstanceType = gossip.BeskarInstance
+	meta.Hostname = br.beskarConfig.Hostname
+
+	br.member, err = gossip.Start(br.beskarConfig.Gossip, meta, nil, 300*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -208,9 +254,58 @@ func (br *Registry) initCacheFunc() (_ *groupcache.Group, errFn error) {
 		return nil, fmt.Errorf("while unmarshalling CA certificates: %w", err)
 	}
 
+	return caPem, nil
+}
+
+func (br *Registry) getHashedHostname() string {
+	//nolint:gosec
+	return fmt.Sprintf("%x", md5.Sum([]byte(br.beskarConfig.Hostname)))
+}
+
+func (br *Registry) initMTLS(ln net.Listener, caPEM *mtls.CAPEM, tlsConfig *tls.Config) error {
+	localIPs, err := netutil.LocalIPs()
+	if err != nil {
+		return err
+	}
+
+	hashedHostname := br.getHashedHostname()
+
+	registryServerConfig, err := mtls.GenerateServerConfig(
+		bytes.NewReader(caPEM.Cert),
+		bytes.NewReader(caPEM.Key),
+		time.Now().AddDate(10, 0, 0),
+		mtls.WithCertRequestIPs(localIPs...),
+		mtls.WithCertRequestHostnames(
+			br.beskarConfig.Hostname,
+			hashedHostname,
+		),
+	)
+	if err != nil {
+		return err
+	}
+
+	if tlsConfig == nil {
+		tlsConfig = registryServerConfig
+	} else {
+		tlsConfig.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+			if hello.ServerName == hashedHostname {
+				return registryServerConfig, nil
+			}
+			return nil, nil
+		}
+	}
+
+	if cln, ok := ln.(*cmux.Listener); ok {
+		cln.SetTLSConfig(tlsConfig)
+	}
+
+	return nil
+}
+
+func (br *Registry) initManifestCache(caPEM *mtls.CAPEM) (_ *groupcache.Group, errFn error) {
 	cacheClientConfig, err := mtls.GenerateClientConfig(
-		bytes.NewReader(caPem.Cert),
-		bytes.NewReader(caPem.Key),
+		bytes.NewReader(caPEM.Cert),
+		bytes.NewReader(caPEM.Key),
 		time.Now().AddDate(10, 0, 0),
 	)
 	if err != nil {
@@ -223,8 +318,8 @@ func (br *Registry) initCacheFunc() (_ *groupcache.Group, errFn error) {
 	}
 
 	cacheServerConfig, err := mtls.GenerateServerConfig(
-		bytes.NewReader(caPem.Cert),
-		bytes.NewReader(caPem.Key),
+		bytes.NewReader(caPEM.Cert),
+		bytes.NewReader(caPEM.Key),
 		time.Now().AddDate(10, 0, 0),
 		mtls.WithCertRequestIPs(localIPs...),
 	)
@@ -236,14 +331,14 @@ func (br *Registry) initCacheFunc() (_ *groupcache.Group, errFn error) {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = cacheClientConfig
+	transport.MaxIdleConnsPerHost = 16
+	transport.ResponseHeaderTimeout = 2 * time.Second
 
 	br.manifestCache = cache.NewCache(cacheAddr, &groupcache.HTTPPoolOptions{
 		Transport: func(context.Context) http.RoundTripper {
 			return transport
 		},
 	})
-
-	go br.startGossipWatcher()
 
 	go func() {
 		err = br.manifestCache.Start(cacheServerConfig)
@@ -252,67 +347,143 @@ func (br *Registry) initCacheFunc() (_ *groupcache.Group, errFn error) {
 		}
 	}()
 
-	return br.manifestCache.NewGroup("manifests", cache.DefaultCacheSize, cacheGetter{})
+	return br.manifestCache.NewGroup("manifests", cache.DefaultCacheSize, cacheGetter{
+		registry: br.registry,
+	})
 }
 
-func (br *Registry) Serve(ctx context.Context) error {
+func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 	br.logger.Info("Starting beskar server")
 
+	manifestCache := &manifestCache{}
+
+	handler := br.server.Handler
+	br.server.Handler = br.router
+
+	br.server.BaseContext = func(net.Listener) context.Context {
+		return context.WithValue(ctx, &manifestCacheKey, manifestCache)
+	}
+
+	tlsConfig, err := br.getTLSConfig(ctx)
+	if err != nil {
+		return err
+	} else if tlsConfig != nil {
+		dcontext.GetLogger(ctx).Infof("listening on %v, tls", ln.Addr())
+		ln = tls.NewListener(ln, tlsConfig)
+	} else {
+		dcontext.GetLogger(ctx).Infof("listening on %v", ln.Addr())
+		ln = cmux.NewListener(ln)
+	}
+
 	go func() {
-		br.errCh <- br.server.ListenAndServe()
+		br.errCh <- br.server.Serve(ln)
 	}()
 
-	_, err := br.listBeskarTags(ctx)
+	caPEM, err := br.initGossip()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		gossipErr := br.member.Shutdown()
+		if errFn == nil {
+			errFn = gossipErr
+		}
+	}()
 
-	err = br.wait()
+	if err := br.initMTLS(ln, caPEM, tlsConfig); err != nil {
+		return err
+	}
+
+	manifestCache.Group, err = br.initManifestCache(caPEM)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		manifestCacheErr := br.manifestCache.Stop(ctx)
+		if errFn == nil {
+			errFn = manifestCacheErr
+		}
+	}()
+
+	pluginClientConfig, err := mtls.GenerateClientConfig(
+		bytes.NewReader(caPEM.Cert),
+		bytes.NewReader(caPEM.Key),
+		time.Now().AddDate(10, 0, 0),
+	)
+	if err != nil {
+		return fmt.Errorf("while generating plugin client mTLS certificates: %w", err)
+	}
+
+	br.pluginManager = newPluginManager(br.registry, br.router, pluginClientConfig)
+
+	go br.startGossipWatcher()
+
+	br.router.NotFoundHandler = handler
+
+	if err := br.member.MarkAsReady(gossip.DefaultReadyTimeout); err != nil {
+		return err
+	}
+
+	err = br.wait(true)
 
 	br.logger.Info("Stopping beskar server")
 
-	gossipErr := br.member.Shutdown()
-	if err == nil {
-		err = gossipErr
-	}
-	manifestCacheErr := br.manifestCache.Stop(ctx)
-	if err == nil {
-		err = manifestCacheErr
+	if err == nil && br.beskarConfig.Registry.HTTP.DrainTimeout > 0 {
+		c, cancel := context.WithTimeout(context.Background(), br.beskarConfig.Registry.HTTP.DrainTimeout)
+		err = br.server.Shutdown(c)
+		cancel()
 	}
 
 	return err
 }
 
 func (br *Registry) Put(ctx context.Context, repository distribution.Repository, dgst digest.Digest, mediaType string, payload []byte) error {
-	switch mediaType {
+	return br.sendEvent(
+		ctx,
+		&eventv1.EventPayload{
+			Repository: repository.Named().String(),
+			Digest:     dgst.String(),
+			Mediatype:  mediaType,
+			Payload:    payload,
+			Action:     eventv1.Action_ACTION_PUT,
+		},
+	)
+}
+
+func (br *Registry) Delete(ctx context.Context, repository distribution.Repository, dgst digest.Digest, mediaType string, payload []byte) error {
+	return br.sendEvent(
+		ctx,
+		&eventv1.EventPayload{
+			Repository: repository.Named().String(),
+			Digest:     dgst.String(),
+			Mediatype:  mediaType,
+			Payload:    payload,
+			Action:     eventv1.Action_ACTION_DELETE,
+		},
+	)
+}
+
+func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) error {
+	switch event.Mediatype {
 	case "application/vnd.oci.image.manifest.v1+json",
 		"application/vnd.docker.distribution.manifest.v1+json",
 		"application/vnd.docker.distribution.manifest.v2+json":
-		ociManifest, err := v1.ParseManifest(bytes.NewReader(payload))
+		ociManifest, err := v1.ParseManifest(bytes.NewReader(event.Payload))
 		if err != nil {
 			return err
 		}
-		mediaType = string(ociManifest.Config.MediaType)
-		proxyPlugin, ok := br.proxyPlugins[mediaType]
+		event.Mediatype = string(ociManifest.Config.MediaType)
+		plugin, ok := br.pluginManager.getPlugin(event.Mediatype)
 		if !ok {
+			br.logger.Info("NO PLUGIN FOUND")
 			return nil
 		}
 
-		br.logger.Debugf("Sending manifest %s event to plugin", repository.Named().String())
+		br.logger.Debugf("Sending manifest %s event to plugin", event.Repository)
 
-		return proxyPlugin.send(
-			ctx,
-			repository.Named().String(),
-			mediaType,
-			payload,
-			dgst.String(),
-		)
+		return plugin.sendEvent(ctx, event, nil)
 	default:
 	}
 
-	return nil
-}
-
-func (br *Registry) Delete(context.Context, digest.Digest) error {
 	return nil
 }

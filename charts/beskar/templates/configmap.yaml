@@ -8,4 +8,3 @@ metadata:
 data:
   beskar.yaml: |-
 {{ toYaml .Values.configData | indent 4 }}
-{{- include "beskar.plugins" . | nindent 4 }}

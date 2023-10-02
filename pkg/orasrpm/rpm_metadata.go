@@ -4,26 +4,30 @@
 package orasrpm
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/pkg/oras"
 )
 
 const (
-	RepomdConfigType         = "application/vnd.ciq.rpm.repomd.v1.config+json"
-	RepomdXMLLayerType       = "application/vnd.ciq.rpm.repomd.v1.xml"
-	OtherXMLLayerType        = "application/vnd.ciq.rpm.other.v1.xml+gzip"
-	OtherSQLiteLayerType     = "application/vnd.ciq.rpm.other.sqlite.v1.gzip"
-	PrimaryXMLLayerType      = "application/vnd.ciq.rpm.primary.v1.xml+gzip"
-	PrimarySQLiteLayerType   = "application/vnd.ciq.rpm.primary.sqlite.v1.gzip"
-	FilelistsXMLLayerType    = "application/vnd.ciq.rpm.filelists.v1.xml+gzip"
-	FilelistsSQLiteLayerType = "application/vnd.ciq.rpm.filelists.sqlite.v1.gzip"
+	RepomdConfigType          = "application/vnd.ciq.rpm.repomd.v1.config+json"
+	RepomdXMLLayerType        = "application/vnd.ciq.rpm.repomd.v1.xml"
+	RepomdDataConfigType      = "application/vnd.ciq.rpm.repomd.extra.v1.config+xml"
+	RepomdDataLayerTypeFormat = "application/vnd.ciq.rpm.repomd.extra.v1.%s"
 )
+
+func GetRepomdDataLayerType(dataType string) string {
+	return fmt.Sprintf(RepomdDataLayerTypeFormat, dataType)
+}
 
 type RPMMetadata interface {
 	Path() string
@@ -35,17 +39,19 @@ type RPMMetadata interface {
 
 var _ oras.Pusher = &RPMPusher{}
 
-func NewRPMMetadataPusher(ref name.Reference, layers ...oras.Layer) *RPMMetadataPusher {
+func NewRPMMetadataPusher(ref name.Reference, configMediatype types.MediaType, layers ...oras.Layer) *RPMMetadataPusher {
 	return &RPMMetadataPusher{
-		ref:    ref,
-		layers: layers,
+		ref:             ref,
+		layers:          layers,
+		configMediatype: configMediatype,
 	}
 }
 
 // RPMMetadataPusher type to push RPM metadata to registry.
 type RPMMetadataPusher struct {
-	ref    name.Reference
-	layers []oras.Layer
+	ref             name.Reference
+	layers          []oras.Layer
+	configMediatype types.MediaType
 }
 
 func (rp *RPMMetadataPusher) Reference() name.Reference {
@@ -59,8 +65,8 @@ func (rp *RPMMetadataPusher) ImageIndex() (v1.ImageIndex, error) {
 func (rp *RPMMetadataPusher) Image() (v1.Image, error) {
 	img := oras.NewImage()
 
-	if err := img.AddConfig(RepomdConfigType, nil); err != nil {
-		return nil, fmt.Errorf("while adding RPM repomd config: %w", err)
+	if err := img.AddConfig(rp.configMediatype, nil); err != nil {
+		return nil, fmt.Errorf("while adding RPM metadata config: %w", err)
 	}
 
 	for _, layer := range rp.layers {
@@ -72,13 +78,39 @@ func (rp *RPMMetadataPusher) Image() (v1.Image, error) {
 	return img, nil
 }
 
+func NewRPMExtraMetadataPusher(path, repo, dataType string, opts ...name.Option) (*RPMMetadataPusher, error) {
+	if !strings.HasPrefix(repo, "yum/") {
+		repo = filepath.Join("yum", repo)
+	}
+
+	rawRef := filepath.Join(repo, "repodata:"+dataType)
+
+	ref, err := name.ParseReference(rawRef, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := NewGenericRPMMetadata(path, GetRepomdDataLayerType(dataType), map[string]string{
+		imagespec.AnnotationTitle: filepath.Base(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &RPMMetadataPusher{
+		ref:             ref,
+		layers:          []oras.Layer{NewRPMMetadataLayer(metadata)},
+		configMediatype: RepomdDataConfigType,
+	}, nil
+}
+
 // RPMMetadataLayer defines an OCI layer descriptor associated to RPM repository metadatas.
 type RPMMetadataLayer struct {
 	repomd RPMMetadata
 }
 
 // NewRPMMetadataLayer returns an OCI layer descriptor for the corresponding
-// RPM package.
+// RPM metadata.
 func NewRPMMetadataLayer(repomd RPMMetadata) *RPMMetadataLayer {
 	return &RPMMetadataLayer{
 		repomd: repomd,
@@ -132,4 +164,63 @@ func (l *RPMMetadataLayer) Annotations() map[string]string {
 // Platform returns platform information for this layer.
 func (l *RPMMetadataLayer) Platform() *v1.Platform {
 	return nil
+}
+
+// GenericRPMMetadata defines a generic RPM repository metadata.
+type GenericRPMMetadata struct {
+	path        string
+	digest      string
+	mediatype   string
+	size        int64
+	annotations map[string]string
+}
+
+// NewGenericRPMMetadata returns a generic RPM repository metadata.
+func NewGenericRPMMetadata(path string, mediatype string, annotations map[string]string) (*GenericRPMMetadata, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	checksum := sha256.New()
+
+	size, err := io.Copy(checksum, f)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GenericRPMMetadata{
+		path:        path,
+		digest:      fmt.Sprintf("%x", checksum.Sum(nil)),
+		mediatype:   mediatype,
+		size:        size,
+		annotations: annotations,
+	}, nil
+}
+
+// Path returns the metadata file path.
+func (g *GenericRPMMetadata) Path() string {
+	return g.path
+}
+
+// Digest returns the metadata file digest.
+func (g *GenericRPMMetadata) Digest() (string, string) {
+	return "sha256", g.digest
+}
+
+// Size returns the metadata file size.
+func (g *GenericRPMMetadata) Size() int64 {
+	return g.size
+}
+
+// Mediatype returns the mediatype for this metadata.
+func (g *GenericRPMMetadata) Mediatype() string {
+	return g.mediatype
+}
+
+// Annotations returns optional annotations associated with
+// the metadata file.
+func (g *GenericRPMMetadata) Annotations() map[string]string {
+	return g.annotations
 }

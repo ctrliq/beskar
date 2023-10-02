@@ -4,14 +4,17 @@
 package orasrpm
 
 import (
+	"crypto/md5" //nolint:gosec
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
+	"github.com/cavaliergopher/rpm"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -20,13 +23,9 @@ import (
 )
 
 const (
-	RPMPackageLayerType = "application/vnd.ciq.rpm-package.v1.bin"
+	RPMConfigType       = "application/vnd.ciq.rpm.package.v1.config+json"
+	RPMPackageLayerType = "application/vnd.ciq.rpm.package.v1.rpm"
 )
-
-// RPMConfigTypes is the supported config types for RPM packages. Default type first.
-var RPMConfigTypes = []types.MediaType{
-	"application/vnd.ciq.rpm-package.v1.config+json",
-}
 
 var ErrNoRPMConfig = errors.New("RPM config not found")
 
@@ -74,12 +73,10 @@ func (rp *RPMPuller) RawConfig(_ []byte) error {
 }
 
 func (rp *RPMPuller) Config(config v1.Descriptor) error {
-	for _, t := range RPMConfigTypes {
-		if config.MediaType == t {
-			return nil
-		}
+	if config.MediaType != RPMConfigType {
+		return ErrNoRPMConfig
 	}
-	return ErrNoRPMConfig
+	return nil
 }
 
 func (rp *RPMPuller) Layers(layers []v1.Layer) error {
@@ -108,12 +105,42 @@ func (rp *RPMPuller) Layers(layers []v1.Layer) error {
 
 var _ oras.Pusher = &RPMPusher{}
 
-func NewRPMPusher(ref name.Reference, path string, opts ...RPMLayerOption) *RPMPusher {
+func NewRPMPusher(path, repo string, opts ...name.Option) (*RPMPusher, error) {
+	if !strings.HasPrefix(repo, "yum/") {
+		repo = filepath.Join("yum", repo)
+	}
+
+	rpmFile, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("while opening %s: %w", path, err)
+	}
+	defer rpmFile.Close()
+
+	pkg, err := rpm.Read(rpmFile)
+	if err != nil {
+		return nil, fmt.Errorf("while reading %s metadata: %w", path, err)
+	}
+
+	arch := pkg.Architecture()
+	if pkg.SourceRPM() == "" {
+		arch = "src"
+	}
+
+	rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name(), pkg.Version(), pkg.Release(), arch)
+	//nolint:gosec
+	pkgTag := fmt.Sprintf("%x", md5.Sum([]byte(rpmName)))
+
+	rawRef := filepath.Join(repo, "packages:"+pkgTag)
+	ref, err := name.ParseReference(rawRef, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("while parsing reference %s: %w", rawRef, err)
+	}
+
 	return &RPMPusher{
 		ref:     ref,
 		path:    path,
-		options: opts,
-	}
+		options: DefaultRPMLayerOptions(rpmName, arch),
+	}, nil
 }
 
 // RPMPusher type to push RPM packages to registry.
@@ -135,7 +162,7 @@ func (rp *RPMPusher) Image() (v1.Image, error) {
 	img := oras.NewImage()
 	rpm := NewRPMLayer(rp.path, rp.options...)
 
-	if err := img.AddConfig(RPMConfigTypes[0], nil); err != nil {
+	if err := img.AddConfig(RPMConfigType, nil); err != nil {
 		return nil, fmt.Errorf("while adding RPM config: %w", err)
 	}
 
@@ -157,6 +184,20 @@ func WithRPMLayerAnnotations(annotations map[string]string) RPMLayerOption {
 func WithRPMLayerPlatform(platform *v1.Platform) RPMLayerOption {
 	return func(l *RPMLayer) {
 		l.platform = platform
+	}
+}
+
+func DefaultRPMLayerOptions(rpmName, arch string) []RPMLayerOption {
+	return []RPMLayerOption{
+		WithRPMLayerPlatform(
+			&v1.Platform{
+				Architecture: arch,
+				OS:           "linux",
+			},
+		),
+		WithRPMLayerAnnotations(map[string]string{
+			imagespec.AnnotationTitle: rpmName,
+		}),
 	}
 }
 

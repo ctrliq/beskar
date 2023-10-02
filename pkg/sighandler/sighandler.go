@@ -9,7 +9,7 @@ import (
 	"os/signal"
 )
 
-type WaitFunc func() error
+type WaitFunc func(bool) error
 
 func New(errCh chan error, signals ...os.Signal) (context.Context, WaitFunc) {
 	quit := make(chan os.Signal, 1)
@@ -19,15 +19,19 @@ func New(errCh chan error, signals ...os.Signal) (context.Context, WaitFunc) {
 	// setup channel to get notified on SIGTERM signal
 	signal.Notify(quit, signals...)
 
-	return ctx, func() error {
-		select {
-		case <-ctx.Done():
-		case <-quit:
-			cancel()
-		case err := <-errCh:
-			cancel()
-			return err
+	return ctx, func(returnOnCancel bool) error {
+		for {
+			select {
+			case <-ctx.Done():
+				if returnOnCancel {
+					return nil
+				}
+			case <-quit:
+				cancel()
+			case err := <-errCh:
+				cancel()
+				return err
+			}
 		}
-		return nil
 	}
 }

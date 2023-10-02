@@ -11,16 +11,9 @@ gossip:
   key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
   peers: []
 
-plugins:
-  yum:
-    prefix: /yum
-    mediatype: application/vnd.ciq.rpm-package.v1.config+json
-    backends:
-    - url: http://127.0.0.1:5200?executable=beskar-yum
-      mtls:
-        enabled: false
-        ca-cert: /path/to/ca/cert
-        ca-key: /path/to/ca/key
+# hostname returned to plugins to access registry service,
+# automatically set when deployed on kubernetes
+hostname: localhost
 
 registry:
   log:

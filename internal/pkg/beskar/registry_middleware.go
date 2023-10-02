@@ -6,7 +6,7 @@ package beskar
 import (
 	"context"
 	"fmt"
-	"sync"
+	"sync/atomic"
 
 	"github.com/distribution/distribution/v3"
 	"github.com/distribution/distribution/v3/reference"
@@ -15,28 +15,23 @@ import (
 	"github.com/mailgun/groupcache/v2"
 )
 
-type initCacheFunc func() (*groupcache.Group, error)
-
 type RegistryMiddleware struct {
 	registry             distribution.Namespace
 	manifestEventHandler ManifestEventHandler
-	initCacheOnce        sync.Once
-	initCacheFunc        initCacheFunc
-	cache                *groupcache.Group
+	cache                atomic.Pointer[groupcache.Group]
 }
 
-func registerRegistryMiddleware(meh ManifestEventHandler, initCacheFunc initCacheFunc) (<-chan distribution.Namespace, error) {
+func registerRegistryMiddleware(meh ManifestEventHandler) (<-chan distribution.Namespace, error) {
 	registryCh := make(chan distribution.Namespace, 1)
-	err := middleware.Register("beskar", initRegistryMiddleware(meh, initCacheFunc, registryCh))
+	err := middleware.Register("beskar", initRegistryMiddleware(meh, registryCh))
 	return registryCh, err
 }
 
-func initRegistryMiddleware(meh ManifestEventHandler, initCacheFunc initCacheFunc, registryCh chan distribution.Namespace) middleware.InitFunc {
+func initRegistryMiddleware(meh ManifestEventHandler, registryCh chan distribution.Namespace) middleware.InitFunc {
 	return func(ctx context.Context, registry distribution.Namespace, driver storagedriver.StorageDriver, options map[string]interface{}) (distribution.Namespace, error) {
 		mr := &RegistryMiddleware{
 			registry:             registry,
 			manifestEventHandler: meh,
-			initCacheFunc:        initCacheFunc,
 		}
 		registryCh <- mr
 		close(registryCh)
@@ -55,24 +50,19 @@ func (m *RegistryMiddleware) Scope() distribution.Scope {
 // registry may or may not have the repository but should always return a
 // reference.
 func (m *RegistryMiddleware) Repository(ctx context.Context, name reference.Named) (distribution.Repository, error) {
+	if mc, ok := ctx.Value(&manifestCacheKey).(*manifestCache); ok {
+		if m.cache.CompareAndSwap(nil, mc.Group) {
+			fmt.Println("MANIFEST CACHE SET")
+		}
+	}
 	repository, err := m.registry.Repository(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-
-	m.initCacheOnce.Do(func() {
-		if m.initCacheFunc != nil {
-			m.cache, err = m.initCacheFunc()
-			if err != nil {
-				err = fmt.Errorf("while initializing cache: %w", err)
-			}
-		}
-	})
-
 	return &RepositoryMiddleware{
 		repository:           repository,
 		manifestEventHandler: m.manifestEventHandler,
-		cache:                m.cache,
+		cache:                m.cache.Load(),
 	}, err
 }
 

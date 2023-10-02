@@ -53,20 +53,20 @@ spec:
           - /usr/bin/beskar
           - -config-dir=/etc/beskar
           ports:
-            - containerPort: 5000
+            - containerPort: {{ .Values.services.registry.port }}
               name: {{ if .Values.tlsSecretName }}https{{ else }}http{{ end }}-{{ .Values.services.registry.port }}
               protocol: TCP
-            - containerPort: 5002
+            - containerPort: {{ .Values.services.gossip.port }}
               name: gossip-tcp
               protocol: TCP
-            - containerPort: 5002
+            - containerPort: {{ .Values.services.gossip.port }}
               name: gossip-udp
               protocol: UDP
-            - containerPort: 5003
+            - containerPort: {{ .Values.services.groupcache.port }}
               name: groupcache
               protocol: TCP
             {{- if .Values.metrics.enabled }}
-            - containerPort: {{ (split ":" .Values.configData.registry.http.debug.addr)._1 }}
+            - containerPort: {{ .Values.metrics.port }}
               name: http-metrics
               protocol: TCP
             {{- end }}
@@ -76,14 +76,14 @@ spec:
               scheme: HTTPS
               {{- end }}
               path: /
-              port: 5000
+              port: {{ .Values.services.registry.port }}
           readinessProbe:
             httpGet:
               {{- if .Values.tlsSecretName }}
               scheme: HTTPS
               {{- end }}
               path: /
-              port: 5000
+              port: {{ .Values.services.registry.port }}
           resources: {{ toYaml .Values.resources | nindent 12 }}
           env: {{ include "beskar.envs" . | nindent 12 }}
           volumeMounts: {{ include "beskar.volumeMounts" . | nindent 12 }}
