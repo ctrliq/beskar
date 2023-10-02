@@ -235,7 +235,6 @@ func (p *plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	result, err := p.router.Load().Decision(r, p.registry)
 	if err != nil {
 		dcontext.GetLogger(r.Context()).Errorf("%s router decision error: %s", p.name, err)
-		fmt.Println("WTF!!!!")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if !result.Found {
