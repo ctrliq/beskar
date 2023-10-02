@@ -5,7 +5,6 @@ package beskar
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/distribution/distribution/v3"
@@ -51,9 +50,7 @@ func (m *RegistryMiddleware) Scope() distribution.Scope {
 // reference.
 func (m *RegistryMiddleware) Repository(ctx context.Context, name reference.Named) (distribution.Repository, error) {
 	if mc, ok := ctx.Value(&manifestCacheKey).(*manifestCache); ok {
-		if m.cache.CompareAndSwap(nil, mc.Group) {
-			fmt.Println("MANIFEST CACHE SET")
-		}
+		m.cache.Store(mc.Group)
 	}
 	repository, err := m.registry.Repository(ctx, name)
 	if err != nil {

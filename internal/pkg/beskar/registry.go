@@ -475,7 +475,6 @@ func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) 
 		event.Mediatype = string(ociManifest.Config.MediaType)
 		plugin, ok := br.pluginManager.getPlugin(event.Mediatype)
 		if !ok {
-			br.logger.Info("NO PLUGIN FOUND")
 			return nil
 		}
 
