@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -83,6 +82,8 @@ func encodeManifest(mediaType string, payload []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+var noCacheKey int
+
 type cacheGetter struct {
 	registry distribution.Namespace
 }
@@ -105,18 +106,12 @@ func (cg cacheGetter) Get(ctx context.Context, key string, dest groupcache.Sink)
 	}
 
 	// remote
-
-	path, err := url.PathUnescape(key[:idx])
+	rn, err := reference.WithName(key[:idx])
 	if err != nil {
 		return err
 	}
 
-	rn, err := reference.WithName(path)
-	if err != nil {
-		return err
-	}
-
-	repo, err := cg.registry.Repository(ctx, rn)
+	repo, err := cg.registry.Repository(context.WithValue(ctx, &noCacheKey, &noCacheKey), rn)
 	if err != nil {
 		return err
 	}

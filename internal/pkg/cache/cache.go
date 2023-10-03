@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"sync"
 	"time"
 
@@ -78,6 +79,8 @@ func (gc *GroupCache) setPeers() {
 	for peer := range gc.peers {
 		peers = append(peers, peer)
 	}
+
+	sort.Strings(peers)
 
 	gc.pool.Set(peers...)
 }

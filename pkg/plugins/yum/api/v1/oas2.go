@@ -18,7 +18,7 @@ info:
   license:
     name: "MIT"
 host: "example.com"
-basePath: "/yum/api/v1"
+basePath: "/artifacts/yum/api/v1"
 schemes:
   - "https"
 consumes:

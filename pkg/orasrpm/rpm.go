@@ -106,8 +106,12 @@ func (rp *RPMPuller) Layers(layers []v1.Layer) error {
 var _ oras.Pusher = &RPMPusher{}
 
 func NewRPMPusher(path, repo string, opts ...name.Option) (*RPMPusher, error) {
-	if !strings.HasPrefix(repo, "yum/") {
-		repo = filepath.Join("yum", repo)
+	if !strings.HasPrefix(repo, "artifacts/") {
+		if !strings.HasPrefix(repo, "yum/") {
+			repo = filepath.Join("artifacts", "yum", repo)
+		} else {
+			repo = filepath.Join("artifacts", repo)
+		}
 	}
 
 	rpmFile, err := os.Open(path)

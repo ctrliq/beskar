@@ -16,8 +16,8 @@ jobs:
       - name: Run linters
         run: ./scripts/mage lint:all
 
-  release:
-    name: release
+  release-beskar:
+    name: release beskar
     needs: lint
     runs-on: ubuntu-22.04
     steps:
@@ -29,6 +29,16 @@ jobs:
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
       - name: Release beskar helm chart
         run: ./scripts/mage ci:chart ghcr.io/ctrliq/helm-charts/beskar:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
+
+  release-beskar-yum:
+    name: release beskar-yum
+    needs: lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+      - uses: actions/checkout@v3
       - name: Release beskar-yum image
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-yum:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
       - name: Release beskar-yum helm chart

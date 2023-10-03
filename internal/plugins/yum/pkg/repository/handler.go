@@ -19,6 +19,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/orasrpm"
@@ -44,7 +45,7 @@ type Handler struct {
 	params     *HandlerParams
 
 	queue      []*eventv1.EventPayload
-	queueMutex sync.Mutex
+	queueMutex sync.RWMutex
 	queued     chan struct{}
 
 	stopped atomic.Bool
@@ -93,7 +94,7 @@ func (h *Handler) QueueEvent(event *eventv1.EventPayload, store bool) error {
 	ctx := context.Background()
 
 	if h.getMirror() && !h.getReposync().Syncing {
-		return fmt.Errorf("")
+		return fmt.Errorf("manual upload not supported for repository configured as mirror")
 	}
 
 	if store {
@@ -254,17 +255,7 @@ func (h *Handler) initProperties(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	h.setReposync(reposync)
-
-	if reposync.Syncing {
-		if len(properties.MirrorURLs) > 0 {
-			h.syncing.Store(true)
-			h.syncCh <- struct{}{}
-		} else {
-			reposync.Syncing = false
-		}
-	}
 
 	return nil
 }
@@ -374,7 +365,38 @@ func (h *Handler) start(ctx context.Context) {
 		return
 	}
 
+	reposync := h.getReposync()
+
+	h.propertyMutex.RLock()
+	mirrorCount := len(h.mirrorURLs)
+	h.propertyMutex.RUnlock()
+
+	if reposync.Syncing && mirrorCount == 0 {
+		reposync.Syncing = false
+	}
+
+	numEvents, err := statusDB.CountEnvents(ctx)
+	if err != nil {
+		h.cleanup()
+		h.logger.Error("status DB getting events count", "error", err.Error())
+		return
+	}
+	if h.getMirror() {
+		if !reposync.Syncing && numEvents > 0 {
+			reposync.Syncing = true
+		} else if numEvents == 0 && reposync.Syncing {
+			reposync.Syncing = false
+		}
+	}
+
+	h.logger.Info("status DB events count", "events", numEvents)
+
+	h.updateSyncing(reposync.Syncing)
+
+	var lastIndex *eventv1.EventPayload
+
 	err = statusDB.WalkEvents(ctx, func(event *eventv1.EventPayload) error {
+		lastIndex = event
 		return h.QueueEvent(event, false)
 	})
 	if err != nil {
@@ -383,7 +405,7 @@ func (h *Handler) start(ctx context.Context) {
 		return
 	}
 
-	dbCtx := context.Background()
+	sem := mirror.NewWeighted(syncMaxDownloads)
 
 	go func() {
 		for !h.stopped.Load() {
@@ -392,7 +414,7 @@ func (h *Handler) start(ctx context.Context) {
 				h.stopped.Store(true)
 			case <-h.syncCh:
 				go func() {
-					err := h.repositorySync(dbCtx)
+					err := h.repositorySync(ctx, sem)
 					if err != nil {
 						h.logger.Error("reposistory sync", "error", err.Error())
 					}
@@ -402,14 +424,22 @@ func (h *Handler) start(ctx context.Context) {
 				events := h.queue
 				h.queue = nil
 				h.queueMutex.Unlock()
-				h.processEvents(events)
-				if len(h.queue) > 0 {
+
+				h.processEvents(events, sem)
+
+				// all remaining events in database have been processed
+				// start the repository sync
+				if lastIndex != nil && events[len(events)-1].Digest == lastIndex.Digest {
+					h.syncCh <- struct{}{}
+					lastIndex = nil
+				}
+
+				h.queueMutex.RLock()
+				queueLength := len(h.queue)
+				h.queueMutex.RUnlock()
+
+				if queueLength > 0 {
 					h.notifyQueue()
-				} else if h.getReposync().Syncing {
-					reposync := h.updateSyncing(false)
-					if dbErr := h.updateReposyncDatabase(dbCtx, reposync); dbErr != nil {
-						h.logger.Error("reposync database update", "error", dbErr.Error())
-					}
 				}
 			}
 		}
@@ -431,7 +461,7 @@ func (h *Handler) Stop() {
 	<-h.queued
 }
 
-func (h *Handler) processEvents(events []*eventv1.EventPayload) {
+func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Semaphore) {
 	processContext := context.Background()
 
 	for _, event := range events {
@@ -444,12 +474,12 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 		if event.Action == eventv1.Action_ACTION_PUT {
 			switch manifest.Config.MediaType {
 			case types.MediaType(orasrpm.RPMConfigType):
-				err := h.processPackageManifest(processContext, manifest)
+				err := h.processPackageManifest(processContext, manifest, sem)
 				if err != nil {
 					h.logger.Error("process package manifest", "error", err.Error())
 				}
 			case types.MediaType(orasrpm.RepomdDataConfigType):
-				err := h.processMetadataManifest(processContext, manifest)
+				err := h.processMetadataManifest(processContext, manifest, sem)
 				if err != nil {
 					h.logger.Error("process metadata manifest", "error", err.Error())
 				}

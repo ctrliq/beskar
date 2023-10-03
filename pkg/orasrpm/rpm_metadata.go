@@ -79,8 +79,12 @@ func (rp *RPMMetadataPusher) Image() (v1.Image, error) {
 }
 
 func NewRPMExtraMetadataPusher(path, repo, dataType string, opts ...name.Option) (*RPMMetadataPusher, error) {
-	if !strings.HasPrefix(repo, "yum/") {
-		repo = filepath.Join("yum", repo)
+	if !strings.HasPrefix(repo, "artifacts/") {
+		if !strings.HasPrefix(repo, "yum/") {
+			repo = filepath.Join("artifacts", "yum", repo)
+		} else {
+			repo = filepath.Join("artifacts", repo)
+		}
 	}
 
 	rawRef := filepath.Join(repo, "repodata:"+dataType)

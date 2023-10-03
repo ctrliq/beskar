@@ -63,7 +63,7 @@ type SyncStatus struct {
 //
 //kun:oas title=Yum Repository Management API
 //kun:oas version=1.0.0
-//kun:oas basePath=/yum/api/v1
+//kun:oas basePath=/artifacts/yum/api/v1
 //kun:oas docsPath=/doc/swagger.yaml
 //kun:oas tags=yum
 type YUM interface {

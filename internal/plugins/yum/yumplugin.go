@@ -127,7 +127,7 @@ func (p *Plugin) setRoute() {
 	router.HandleFunc("/event", http.HandlerFunc(p.eventHandler))
 	router.HandleFunc("/info", http.HandlerFunc(p.infoHandler))
 	router.Route(
-		"/yum/api/v1",
+		"/artifacts/yum/api/v1",
 		func(r chi.Router) {
 			r.Use(p.apiMiddleware)
 			r.Mount("/", apiv1.NewHTTPRouter(
@@ -342,6 +342,8 @@ func (p *Plugin) repositoryHandler(repositoryName string) *repository.Handler {
 	logger = logger.With("repository", repositoryName)
 
 	rh := repository.NewHandler(logger, repositoryName, p.repositoryParams)
+
+	logger.Info("repository handler started")
 
 	p.repositoryMutex.Lock()
 	p.repositories[repositoryName] = rh

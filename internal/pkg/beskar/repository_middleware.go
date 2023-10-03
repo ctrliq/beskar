@@ -5,6 +5,7 @@ package beskar
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/distribution/distribution/v3"
@@ -37,6 +38,7 @@ func (m *RepositoryMiddleware) Manifests(ctx context.Context, options ...distrib
 	if err != nil {
 		return nil, err
 	}
+
 	msw := &manifestServiceWrapper{
 		ManifestService:      manifestService,
 		manifestEventHandler: m.manifestEventHandler,
@@ -81,6 +83,12 @@ func (w *manifestServiceWrapper) Get(ctx context.Context, dgst digest.Digest, op
 		destSink := newManifestSink(w.ManifestService, options...)
 
 		if err := w.cache.Get(ctx, getCacheKey(w.repository, dgst), destSink); err != nil {
+			if errors.Is(err, &groupcache.ErrNotFound{}) {
+				return nil, distribution.ErrManifestUnknownRevision{
+					Name:     w.repository.Named().Name(),
+					Revision: dgst,
+				}
+			}
 			return nil, err
 		}
 
