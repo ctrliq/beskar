@@ -1,21 +1,21 @@
 {
     "routes": [
         {
-            "pattern": "/(yum/[0-9A-Za-z-_/]{1,})/repodata/([^/]+)$",
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repodata/([^/]+)$",
             "md5": false,
             "blobtype": "repodata"
         },
         {
-            "pattern": "/(yum/[0-9A-Za-z-_/]{1,})/Packages/[a-z0-9]/([^/]+)$",
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/Packages/[a-z0-9]/([^/]+)$",
             "md5": true,
             "blobtype": "packages"
         },
         {
-            "pattern": "/yum/api/v1/doc/(.*)",
+            "pattern": "/artifacts/yum/api/v1/doc/(.*)",
             "body": false
         },
         {
-            "pattern": "/yum/api/v1/(.*)",
+            "pattern": "/artifacts/yum/api/v1/(.*)",
             "body": true,
             "body_key": "repository"
         }

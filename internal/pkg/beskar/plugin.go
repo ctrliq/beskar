@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var artifactsMatch = regexp.MustCompile(`^/?artifacts/([[:alnum:]]+)/?`)
+
 type nodeInfo struct {
 	pluginName string
 	nodeName   string
@@ -44,16 +47,14 @@ type nodeInfo struct {
 type pluginManager struct {
 	pluginsMutex sync.RWMutex
 	plugins      map[string]*plugin
-	router       *mux.Router
 	registry     distribution.Namespace
 	reverseProxy *httputil.ReverseProxy
 	nodesInfo    map[string]nodeInfo
 	httpClient   *http.Client
 }
 
-func newPluginManager(registry distribution.Namespace, router *mux.Router, tlsConfig *tls.Config) *pluginManager {
+func newPluginManager(registry distribution.Namespace, router *mux.Router) *pluginManager {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = tlsConfig
 
 	reverseProxy := &httputil.ReverseProxy{
 		Transport: transport,
@@ -73,17 +74,44 @@ func newPluginManager(registry distribution.Namespace, router *mux.Router, tlsCo
 		},
 	}
 
-	return &pluginManager{
+	pm := &pluginManager{
 		plugins:      make(map[string]*plugin),
 		registry:     registry,
 		reverseProxy: reverseProxy,
-		router:       router,
 		nodesInfo:    make(map[string]nodeInfo),
 		httpClient: &http.Client{
 			Transport: transport,
 			Timeout:   time.Minute,
 		},
 	}
+
+	router.PathPrefix("/artifacts").Handler(pm)
+
+	return pm
+}
+
+func (pm *pluginManager) setClientTLSConfig(tlsConfig *tls.Config) {
+	transport := pm.httpClient.Transport.(*http.Transport)
+	transport.TLSClientConfig = tlsConfig
+}
+
+func (pm *pluginManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	matches := artifactsMatch.FindStringSubmatch(r.URL.Path)
+	if len(matches) < 2 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	pm.pluginsMutex.RLock()
+	pl := pm.plugins[matches[1]]
+	pm.pluginsMutex.RUnlock()
+
+	if pl == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	pl.ServeHTTP(w, r)
 }
 
 func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta) error {
@@ -116,8 +144,6 @@ func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta
 		if err := pl.initRouter(info); err != nil {
 			return err
 		}
-
-		pm.router.PathPrefix(info.Prefix).Handler(pl)
 
 		pm.plugins[info.Name] = pl
 	} else if semver.Compare(pl.version, info.Version) == -1 {
@@ -206,8 +232,8 @@ func (pm *pluginManager) getPluginInfo(hostport string) (*pluginv1.Info, error) 
 }
 
 func (pm *pluginManager) getPlugin(mediaType string) (*plugin, bool) {
-	pm.pluginsMutex.Lock()
-	defer pm.pluginsMutex.Unlock()
+	pm.pluginsMutex.RLock()
+	defer pm.pluginsMutex.RUnlock()
 
 	for _, plugin := range pm.plugins {
 		if _, ok := plugin.mediaTypes[mediaType]; ok {
@@ -216,6 +242,13 @@ func (pm *pluginManager) getPlugin(mediaType string) (*plugin, bool) {
 	}
 
 	return nil, false
+}
+
+func (pm *pluginManager) hasPlugin(name string) bool {
+	pm.pluginsMutex.RLock()
+	_, has := pm.plugins[name]
+	pm.pluginsMutex.RUnlock()
+	return has
 }
 
 type plugin struct {
@@ -266,10 +299,12 @@ func (p *plugin) sendEvent(ctx context.Context, event *eventv1.EventPayload, nod
 	eb.MaxElapsedTime = 5 * time.Second
 	eb.MaxInterval = 500 * time.Millisecond
 
+	repository := filepath.Dir(event.Repository)
+
 	return backoff.Retry(func() error {
 		destNode := node
 		if destNode == nil {
-			destNode = p.nodeHash.Get(event.Repository)
+			destNode = p.nodeHash.Get(repository)
 		}
 
 		pluginURL := url.URL{

@@ -13,9 +13,8 @@ import (
 )
 
 func checkRepository(repository string) error {
-	splitted := strings.SplitN(repository, "/", 2)
-	if len(splitted) != 2 || splitted[0] != "yum" || splitted[1] == "" {
-		return werror.Wrapf(gcode.ErrInvalidArgument, "bad request: invalid repository name")
+	if !strings.HasPrefix(repository, "artifacts/yum/") {
+		return werror.Wrapf(gcode.ErrInvalidArgument, "invalid repository name, must start with artifacts/yum/ prefix")
 	}
 	return nil
 }

@@ -164,7 +164,11 @@ func (h *Handler) SyncRepository(context.Context) (err error) {
 		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
 	}
 
-	h.syncCh <- struct{}{}
+	select {
+	case h.syncCh <- struct{}{}:
+	default:
+		return werror.Wrap(gcode.ErrUnavailable, errors.New("something goes wrong"))
+	}
 
 	return nil
 }

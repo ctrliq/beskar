@@ -5,6 +5,7 @@ package beskar
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/distribution/distribution/v3"
@@ -14,26 +15,26 @@ import (
 	"github.com/mailgun/groupcache/v2"
 )
 
+type registryCallbackFunc func(distribution.Namespace) *pluginManager
+
 type RegistryMiddleware struct {
 	registry             distribution.Namespace
 	manifestEventHandler ManifestEventHandler
 	cache                atomic.Pointer[groupcache.Group]
+	pluginManager        *pluginManager
 }
 
-func registerRegistryMiddleware(meh ManifestEventHandler) (<-chan distribution.Namespace, error) {
-	registryCh := make(chan distribution.Namespace, 1)
-	err := middleware.Register("beskar", initRegistryMiddleware(meh, registryCh))
-	return registryCh, err
+func registerRegistryMiddleware(meh ManifestEventHandler, callbackFn registryCallbackFunc) error {
+	return middleware.Register("beskar", initRegistryMiddleware(meh, callbackFn))
 }
 
-func initRegistryMiddleware(meh ManifestEventHandler, registryCh chan distribution.Namespace) middleware.InitFunc {
+func initRegistryMiddleware(meh ManifestEventHandler, callbackFn registryCallbackFunc) middleware.InitFunc {
 	return func(ctx context.Context, registry distribution.Namespace, driver storagedriver.StorageDriver, options map[string]interface{}) (distribution.Namespace, error) {
 		mr := &RegistryMiddleware{
 			registry:             registry,
 			manifestEventHandler: meh,
 		}
-		registryCh <- mr
-		close(registryCh)
+		mr.pluginManager = callbackFn(mr)
 		return mr, nil
 	}
 }
@@ -52,15 +53,31 @@ func (m *RegistryMiddleware) Repository(ctx context.Context, name reference.Name
 	if mc, ok := ctx.Value(&manifestCacheKey).(*manifestCache); ok {
 		m.cache.Store(mc.Group)
 	}
+
+	matches := artifactsMatch.FindStringSubmatch(name.String())
+	if len(matches) == 2 {
+		if !m.pluginManager.hasPlugin(matches[1]) {
+			return nil, fmt.Errorf("no plugin found for %s artifacts", matches[1])
+		}
+	}
+
 	repository, err := m.registry.Repository(ctx, name)
 	if err != nil {
 		return nil, err
 	}
+
+	if _, ok := ctx.Value(&noCacheKey).(*int); ok {
+		return &RepositoryMiddleware{
+			repository:           repository,
+			manifestEventHandler: m.manifestEventHandler,
+		}, nil
+	}
+
 	return &RepositoryMiddleware{
 		repository:           repository,
 		manifestEventHandler: m.manifestEventHandler,
 		cache:                m.cache.Load(),
-	}, err
+	}, nil
 }
 
 // Repositories fills 'repos' with a lexicographically sorted catalog of repositories

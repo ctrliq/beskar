@@ -17,12 +17,13 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/decompress"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
-func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest) (errFn error) {
+func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest, sem *mirror.Semaphore) (errFn error) {
 	dataType := ""
 
 	packageLayer, err := getLayerFilter(metadataManifest, func(mediatype types.MediaType) bool {
@@ -43,6 +44,9 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 	metadataPath := filepath.Join(h.downloadDir(), metadataFilename)
 
 	defer func() {
+		if h.syncing.Load() {
+			sem.Release(1)
+		}
 		if errFn == nil {
 			return
 		}

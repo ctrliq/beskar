@@ -70,7 +70,15 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 
 	ctx = dcontext.WithVersion(ctx, version.Version)
 
-	registryCh, err := registerRegistryMiddleware(beskarRegistry)
+	beskarRegistry.router = mux.NewRouter()
+	// for probes
+	beskarRegistry.router.Handle("/", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	err := registerRegistryMiddleware(beskarRegistry, func(registry distribution.Namespace) *pluginManager {
+		beskarRegistry.registry = registry
+		beskarRegistry.pluginManager = newPluginManager(registry, beskarRegistry.router)
+		return beskarRegistry.pluginManager
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -79,15 +87,10 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 		return nil, nil, err
 	}
 
-	beskarRegistry.router = mux.NewRouter()
-	// for probes
-	beskarRegistry.router.Handle("/", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-
 	registryServer, err := registry.NewRegistry(ctx, beskarConfig.Registry)
 	if err != nil {
 		return nil, nil, err
 	}
-	beskarRegistry.registry = <-registryCh
 
 	reflectServer := reflect.ValueOf(registryServer).Elem().FieldByName("server")
 	if reflectServer.IsZero() || reflectServer.IsNil() {
@@ -327,7 +330,11 @@ func (br *Registry) initManifestCache(caPEM *mtls.CAPEM) (_ *groupcache.Group, e
 		return nil, fmt.Errorf("while generating cache server mTLS certificates: %w", err)
 	}
 
-	cacheAddr := fmt.Sprintf("https://%s", br.beskarConfig.Cache.Addr)
+	_, port, err := net.SplitHostPort(br.beskarConfig.Cache.Addr)
+	if err != nil {
+		return nil, err
+	}
+	cacheAddr := fmt.Sprintf("https://%s", net.JoinHostPort(br.member.LocalNode().Addr.String(), port))
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = cacheClientConfig
@@ -354,15 +361,6 @@ func (br *Registry) initManifestCache(caPEM *mtls.CAPEM) (_ *groupcache.Group, e
 
 func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 	br.logger.Info("Starting beskar server")
-
-	manifestCache := &manifestCache{}
-
-	handler := br.server.Handler
-	br.server.Handler = br.router
-
-	br.server.BaseContext = func(net.Listener) context.Context {
-		return context.WithValue(ctx, &manifestCacheKey, manifestCache)
-	}
 
 	tlsConfig, err := br.getTLSConfig(ctx)
 	if err != nil {
@@ -394,6 +392,26 @@ func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 		return err
 	}
 
+	pluginClientConfig, err := mtls.GenerateClientConfig(
+		bytes.NewReader(caPEM.Cert),
+		bytes.NewReader(caPEM.Key),
+		time.Now().AddDate(10, 0, 0),
+	)
+	if err != nil {
+		return fmt.Errorf("while generating plugin client mTLS certificates: %w", err)
+	}
+
+	br.pluginManager.setClientTLSConfig(pluginClientConfig)
+
+	manifestCache := &manifestCache{}
+
+	br.router.NotFoundHandler = br.server.Handler
+	br.server.Handler = br.router
+
+	br.server.BaseContext = func(net.Listener) context.Context {
+		return context.WithValue(ctx, &manifestCacheKey, manifestCache)
+	}
+
 	manifestCache.Group, err = br.initManifestCache(caPEM)
 	if err != nil {
 		return err
@@ -405,20 +423,7 @@ func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 		}
 	}()
 
-	pluginClientConfig, err := mtls.GenerateClientConfig(
-		bytes.NewReader(caPEM.Cert),
-		bytes.NewReader(caPEM.Key),
-		time.Now().AddDate(10, 0, 0),
-	)
-	if err != nil {
-		return fmt.Errorf("while generating plugin client mTLS certificates: %w", err)
-	}
-
-	br.pluginManager = newPluginManager(br.registry, br.router, pluginClientConfig)
-
 	go br.startGossipWatcher()
-
-	br.router.NotFoundHandler = handler
 
 	if err := br.member.MarkAsReady(gossip.DefaultReadyTimeout); err != nil {
 		return err
@@ -464,6 +469,11 @@ func (br *Registry) Delete(ctx context.Context, repository distribution.Reposito
 }
 
 func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) error {
+	matches := artifactsMatch.FindStringSubmatch(event.Repository)
+	if len(matches) < 2 {
+		return nil
+	}
+
 	switch event.Mediatype {
 	case "application/vnd.oci.image.manifest.v1+json",
 		"application/vnd.docker.distribution.manifest.v1+json",

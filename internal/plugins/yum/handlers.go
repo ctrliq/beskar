@@ -100,7 +100,6 @@ func (p *Plugin) infoHandler(w http.ResponseWriter, r *http.Request) {
 
 	info := &pluginv1.Info{
 		Name:    "yum",
-		Prefix:  "/yum",
 		Version: version.Semver,
 		Mediatypes: []string{
 			orasrpm.RPMConfigType,

@@ -266,6 +266,31 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 	return nil
 }
 
+func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
+	db.reference.Add(1)
+	defer db.reference.Add(-1)
+
+	if err := db.open(ctx); err != nil {
+		return 0, err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(id) as id FROM events")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	count := 0
+
+	for rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			return 0, err
+		}
+	}
+
+	return count, nil
+}
+
 func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 	db.reference.Add(1)
 	defer db.reference.Add(-1)
