@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -26,7 +27,6 @@ import (
 	"gocloud.dev/blob"
 	"golang.org/x/crypto/openpgp"       //nolint:staticcheck
 	"golang.org/x/crypto/openpgp/armor" //nolint:staticcheck
-	"golang.org/x/exp/slog"
 )
 
 type HandlerParams struct {

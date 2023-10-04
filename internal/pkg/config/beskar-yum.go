@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/distribution/distribution/v3/configuration"
-	"golang.org/x/exp/slog"
 )
 
 const (

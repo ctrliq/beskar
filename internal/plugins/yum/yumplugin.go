@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -31,7 +32,6 @@ import (
 	"go.ciq.dev/beskar/pkg/mtls"
 	"go.ciq.dev/beskar/pkg/netutil"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/yum/api/v1"
-	"golang.org/x/exp/slog"
 )
 
 type Plugin struct {
