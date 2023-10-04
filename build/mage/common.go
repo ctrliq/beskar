@@ -14,7 +14,7 @@ import (
 
 const (
 	GoImage           = "golang:1.21.1-alpine"
-	GolangCILintImage = "golangci/golangci-lint:v1.53-alpine"
+	GolangCILintImage = "golangci/golangci-lint:v1.54.2-alpine"
 	HelmImage         = "alpine/helm:3.12.2"
 	ProtolintImage    = "yoheimuta/protolint:0.45.0"
 	BaseImage         = "alpine:3.17"
