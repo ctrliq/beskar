@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"crypto/sha256"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/klauspost/compress/gzip"
+	"go.ciq.dev/beskar/internal/pkg/repository"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yummeta"
 	"go.ciq.dev/beskar/pkg/oras"
@@ -271,10 +272,10 @@ func (r *repomd) getRoot() (*yummeta.RepoMdRoot, error) {
 	return repomdRoot, xml.NewDecoder(repomd).Decode(repomdRoot)
 }
 
-func (r *repomd) push(handler *Handler, extraMetadatas []*yumdb.ExtraMetadata) error {
+func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.ExtraMetadata) error {
 	pushRef, err := name.ParseReference(
 		r.repository+":"+RepomdXMLTag,
-		handler.params.NameOptions...,
+		params.NameOptions...,
 	)
 	if err != nil {
 		return err
@@ -453,7 +454,7 @@ func (r *repomd) push(handler *Handler, extraMetadatas []*yumdb.ExtraMetadata) e
 
 	return oras.Push(
 		orasrpm.NewRPMMetadataPusher(pushRef, orasrpm.RepomdConfigType, metadataLayers...),
-		handler.params.RemoteOptions...,
+		params.RemoteOptions...,
 	)
 }
 

@@ -25,6 +25,9 @@ linters:
     - forbidigo
     - makezero
     - depguard
+    - varcheck # deprecated and replaced by unused
+    - deadcode # deprecated and replaced by unused
+    - structcheck # deprecated and replaced by unused
     - wrapcheck # will fix later
     - gocritic # does not like log.Fatal with defers
     - gci # collides with other linters

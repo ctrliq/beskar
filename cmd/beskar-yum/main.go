@@ -11,8 +11,10 @@ import (
 	"os"
 	"syscall"
 
-	"go.ciq.dev/beskar/internal/pkg/config"
+	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/yum"
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/config"
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumrepository"
 	"go.ciq.dev/beskar/pkg/sighandler"
 	"go.ciq.dev/beskar/pkg/version"
 )
@@ -39,13 +41,13 @@ func serve(beskarYumCmd *flag.FlagSet) error {
 	}
 	defer ln.Close()
 
-	yp, err := yum.New(ctx, beskarYumConfig, true)
+	plugin, err := yum.New(ctx, beskarYumConfig)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		errCh <- yp.Serve(ln)
+		errCh <- pluginsrv.Serve[*yumrepository.Handler](ln, plugin)
 	}()
 
 	return wait(false)

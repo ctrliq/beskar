@@ -6,27 +6,16 @@ package yumdb
 import (
 	"context"
 	"embed"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"sync/atomic"
 
-	"github.com/adlio/schema"
-	"github.com/jmoiron/sqlx"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"gocloud.dev/blob"
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	statusDBFile           = "status.db"
-	statusDBCompressedFile = "status.db.lz4"
-)
-
 //go:embed schema/status/*.sql
-var StatusSchemas embed.FS
+var statusSchemas embed.FS
 
 // events table
 type Event struct {
@@ -49,116 +38,24 @@ type Reposync struct {
 }
 
 type StatusDB struct {
-	*sqlx.DB
-	reference  atomic.Int32
-	mutex      sync.RWMutex
-	bucket     *blob.Bucket
-	dataDir    string
-	repository string
+	*sqlite.DB
 }
 
 func OpenStatusDB(ctx context.Context, bucket *blob.Bucket, dataDir string, repository string) (*StatusDB, error) {
-	statusDB := &StatusDB{
-		bucket:     bucket,
-		dataDir:    dataDir,
-		repository: repository,
-	}
-
-	if err := statusDB.open(ctx); err != nil {
+	db, err := sqlite.New(ctx, "status", sqlite.Storage{
+		Bucket:             bucket,
+		DataDir:            dataDir,
+		Repository:         repository,
+		SchemaFS:           statusSchemas,
+		SchemaGlob:         "schema/status/*.sql",
+		Filename:           "status.db",
+		CompressedFilename: "status.db.lz4",
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	migrations, err := schema.FSMigrations(StatusSchemas, "schema/status/*.sql")
-	if err != nil {
-		return nil, fmt.Errorf("while setting status DB migration: %w", err)
-	}
-
-	migrator := schema.NewMigrator(schema.WithDialect(schema.SQLite))
-	if err := migrator.Apply(statusDB.DB, migrations); err != nil {
-		return nil, fmt.Errorf("while applying status DB migration: %w", err)
-	}
-
-	return statusDB, nil
-}
-
-func (db *StatusDB) open(ctx context.Context) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil {
-		return nil
-	}
-
-	key := filepath.Join(db.repository, statusDBCompressedFile)
-
-	dbPath := db.Path()
-	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0o700); err != nil {
-		return fmt.Errorf("while creating database directory %s: %w", dbDir, err)
-	}
-
-	_, err := os.Stat(dbPath)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		remoteReader, err := db.bucket.NewReader(ctx, key, &blob.ReaderOptions{})
-		if err == nil {
-			defer remoteReader.Close()
-
-			if err := pull(dbPath, remoteReader); err != nil {
-				return fmt.Errorf("while pulling repository DB: %w", err)
-			}
-		}
-	} else if err != nil {
-		return err
-	}
-
-	db.DB, err = sqlx.Open(driverName, dbPath)
-	if err != nil {
-		return fmt.Errorf("while opening repository DB %s: %w", dbPath, err)
-	}
-	db.SetMaxOpenConns(1)
-
-	return nil
-}
-
-func (db *StatusDB) Path() string {
-	return filepath.Join(db.dataDir, db.repository, statusDBFile)
-}
-
-func (db *StatusDB) Sync(ctx context.Context) error {
-	key := filepath.Join(db.repository, statusDBCompressedFile)
-
-	remoteWriter, err := db.bucket.NewWriter(ctx, key, &blob.WriterOptions{})
-	if err != nil {
-		return fmt.Errorf("while initializing s3 object writer: %w", err)
-	}
-
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if err := push(db.Path(), remoteWriter); err != nil {
-		_ = remoteWriter.Close()
-		return fmt.Errorf("while pushing status database to s3 bucket: %w", err)
-	}
-
-	return remoteWriter.Close()
-}
-
-func (db *StatusDB) Close(removeDB bool) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil && db.reference.Load() == 0 {
-		err := db.DB.Close()
-		db.DB = nil
-		if removeDB {
-			if removeErr := os.Remove(db.Path()); removeErr != nil && err == nil {
-				err = removeErr
-			}
-		}
-		return err
-	}
-
-	return nil
+	return &StatusDB{db}, nil
 }
 
 func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) error {
@@ -167,14 +64,14 @@ func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) e
 		return fmt.Errorf("while marshalling event: %w", err)
 	}
 
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"INSERT INTO events VALUES(:id, :payload) ON CONFLICT (id) DO UPDATE SET payload = :payload",
@@ -183,7 +80,7 @@ func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) e
 			Payload: payload,
 		},
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -200,20 +97,20 @@ func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) e
 }
 
 func (db *StatusDB) RemoveEvent(ctx context.Context, id string) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"DELETE FROM events WHERE id = :id",
 		&Event{ID: id},
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -236,10 +133,10 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 		return fmt.Errorf("no walk events function provided")
 	}
 
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
@@ -267,10 +164,10 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 }
 
 func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return 0, err
 	}
 
@@ -292,10 +189,10 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 }
 
 func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return nil, err
 	}
 
@@ -318,20 +215,20 @@ func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 }
 
 func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"UPDATE properties SET created = :created, mirror = :mirror, mirror_urls = :mirror_urls, gpg_key = :gpg_key WHERE id = 1",
 		properties,
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -348,10 +245,10 @@ func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties
 }
 
 func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return nil, err
 	}
 
@@ -377,14 +274,14 @@ func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 }
 
 func (db *StatusDB) UpdateReposync(ctx context.Context, reposync *Reposync) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"UPDATE reposync SET syncing = :syncing, last_sync_time = :last_sync_time, "+
@@ -392,7 +289,7 @@ func (db *StatusDB) UpdateReposync(ctx context.Context, reposync *Reposync) erro
 			"WHERE id = 1",
 		reposync,
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err

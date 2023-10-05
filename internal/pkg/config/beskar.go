@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/distribution/distribution/v3/configuration"
+	"go.ciq.dev/beskar/internal/pkg/gossip"
 )
 
 const (
@@ -30,18 +31,12 @@ type Cache struct {
 	Size uint32 `yaml:"size"`
 }
 
-type Gossip struct {
-	Addr  string   `yaml:"addr"`
-	Key   string   `yaml:"key"`
-	Peers []string `yaml:"peers"`
-}
-
 type BeskarConfig struct {
 	Version   string                       `yaml:"version"`
 	Profiling bool                         `yaml:"profiling"`
 	Hostname  string                       `yaml:"hostname"`
 	Cache     Cache                        `yaml:"cache"`
-	Gossip    Gossip                       `yaml:"gossip"`
+	Gossip    gossip.Config                `yaml:"gossip"`
 	Registry  *configuration.Configuration `yaml:"registry"`
 }
 

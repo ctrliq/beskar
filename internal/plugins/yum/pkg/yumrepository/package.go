@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"bytes"
@@ -19,16 +19,17 @@ import (
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yummeta"
+	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 )
 
 func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v1.Manifest, sem *mirror.Semaphore) (errFn error) {
-	packageLayer, err := getLayer(packageManifest, orasrpm.RPMPackageLayerType)
+	packageLayer, err := oras.GetLayer(packageManifest, orasrpm.RPMPackageLayerType)
 	if err != nil {
 		return err
 	}
-	ref := filepath.Join(h.repository, "packages@sha256:"+packageLayer.Digest.Hex)
+	ref := filepath.Join(h.Repository, "packages@sha256:"+packageLayer.Digest.Hex)
 
 	packageName := packageLayer.Annotations[imagespec.AnnotationTitle]
 	packagePath := filepath.Join(h.downloadDir(), packageName)
@@ -45,7 +46,7 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 		// TODO: remove package
 	}()
 
-	if err := downloadBlob(ref, packagePath, h.params); err != nil {
+	if err := h.DownloadBlob(ref, packagePath); err != nil {
 		return fmt.Errorf("while downloading package %s: %w", packageName, err)
 	}
 	defer os.Remove(packagePath)
@@ -103,7 +104,7 @@ func (h *Handler) generateAndPushMetadata(ctx context.Context) (errFn error) {
 		return err
 	}
 
-	repomd, err := newRepomd(outputDir, filepath.Join(h.repository, "repodata"), packageCount)
+	repomd, err := newRepomd(outputDir, filepath.Join(h.Repository, "repodata"), packageCount)
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func (h *Handler) generateAndPushMetadata(ctx context.Context) (errFn error) {
 		return err
 	}
 
-	return repomd.push(h, extraMetadatas)
+	return repomd.push(h.Params, extraMetadatas)
 }
 
 func (h *Handler) deletePackageManifest(_ context.Context, _ *v1.Manifest) error {

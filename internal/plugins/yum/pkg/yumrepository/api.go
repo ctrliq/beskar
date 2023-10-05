@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"bytes"
@@ -35,7 +35,7 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	} else if propertiesDB.Created {
-		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s already exists", h.repository))
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s already exists", h.Repository))
 	}
 
 	propertiesDB.Created = true

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"bytes"
@@ -20,13 +20,14 @@ import (
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/decompress"
+	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
 func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest, sem *mirror.Semaphore) (errFn error) {
 	dataType := ""
 
-	packageLayer, err := getLayerFilter(metadataManifest, func(mediatype types.MediaType) bool {
+	packageLayer, err := oras.GetLayerFilter(metadataManifest, func(mediatype types.MediaType) bool {
 		n, err := fmt.Sscanf(string(mediatype), orasrpm.RepomdDataLayerTypeFormat, &dataType)
 		if n == 0 || err != nil {
 			return false
@@ -38,7 +39,7 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 		return err
 	}
 
-	ref := filepath.Join(h.repository, "repodata@sha256:"+packageLayer.Digest.Hex)
+	ref := filepath.Join(h.Repository, "repodata@sha256:"+packageLayer.Digest.Hex)
 
 	metadataFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
 	metadataPath := filepath.Join(h.downloadDir(), metadataFilename)
@@ -55,7 +56,7 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 		// TODO: remove metadata
 	}()
 
-	if err := downloadBlob(ref, metadataPath, h.params); err != nil {
+	if err := h.DownloadBlob(ref, metadataPath); err != nil {
 		return fmt.Errorf("while downloading metadata %s: %w", metadataFilename, err)
 	}
 	defer os.Remove(metadataPath)

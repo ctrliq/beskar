@@ -1,44 +1,28 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package yumdb
+package sqlite
 
 import (
-	"database/sql/driver"
 	"io"
+	"io/fs"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/pierrec/lz4"
-	// load sqlite driver
-	_ "modernc.org/sqlite"
+	"gocloud.dev/blob"
 )
 
-const driverName = "sqlite"
+type Storage struct {
+	Bucket     *blob.Bucket
+	DataDir    string
+	Repository string
 
-type DBTime struct {
-	time.Time
-}
+	SchemaFS   fs.FS
+	SchemaGlob string
 
-// Scan implements the Scanner interface.
-func (dbt *DBTime) Scan(value any) error {
-	if value == nil {
-		dbt.Time = time.Time{}
-		return nil
-	}
-	switch v := value.(type) {
-	case int64:
-		dbt.Time = time.Unix(v, 0)
-	default:
-		dbt.Time = time.Time{}
-	}
-	return nil
-}
-
-// Value implements the driver Valuer interface.
-func (dbt DBTime) Value() (driver.Value, error) {
-	return dbt.Time, nil
+	Filename           string
+	CompressedFilename string
 }
 
 func newBuffer() interface{} {

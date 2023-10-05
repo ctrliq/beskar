@@ -7,17 +7,16 @@ import (
 	"context"
 	"os"
 
-	"go.ciq.dev/beskar/internal/pkg/config"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/fileblob"
 )
 
-func initFS(_ context.Context, pluginConfig config.BeskarYumFSStorage, prefix string) (*blob.Bucket, error) {
-	if err := os.MkdirAll(pluginConfig.Directory, 0o700); err != nil {
+func initFS(_ context.Context, config FSStorageConfig, prefix string) (*blob.Bucket, error) {
+	if err := os.MkdirAll(config.Directory, 0o700); err != nil {
 		return nil, err
 	}
 
-	bucket, err := fileblob.OpenBucket(pluginConfig.Directory, nil)
+	bucket, err := fileblob.OpenBucket(config.Directory, nil)
 	if err != nil {
 		return nil, err
 	}
