@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/klauspost/compress/gzip"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/internal/pkg/repository"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yummeta"
@@ -137,7 +138,10 @@ func (x *primaryXML) Mediatype() string {
 }
 
 func (x *primaryXML) Annotations() map[string]string {
-	return nil
+	_, hex := x.Digest()
+	return map[string]string{
+		imagespec.AnnotationTitle: fmt.Sprintf("%s-%s", hex, yummeta.DataFilePrefix(yummeta.PrimaryDataType)),
+	}
 }
 
 type filelistsXML struct {
@@ -160,7 +164,10 @@ func (x *filelistsXML) Mediatype() string {
 }
 
 func (x *filelistsXML) Annotations() map[string]string {
-	return nil
+	_, hex := x.Digest()
+	return map[string]string{
+		imagespec.AnnotationTitle: fmt.Sprintf("%s-%s", hex, yummeta.DataFilePrefix(yummeta.FilelistsDataType)),
+	}
 }
 
 type otherXML struct {
@@ -183,7 +190,10 @@ func (x *otherXML) Mediatype() string {
 }
 
 func (x *otherXML) Annotations() map[string]string {
-	return nil
+	_, hex := x.Digest()
+	return map[string]string{
+		imagespec.AnnotationTitle: fmt.Sprintf("%s-%s", hex, yummeta.DataFilePrefix(yummeta.OtherDataType)),
+	}
 }
 
 type repomd struct {
@@ -377,7 +387,8 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 	for dataType, sqliteFile := range sqliteFiles {
 		mediatype := orasrpm.GetRepomdDataLayerType(string(dataType))
 		path := filepath.Join(repodataDir, sqliteFile)
-		layer, err := orasrpm.NewGenericRPMMetadata(path, mediatype, nil)
+		annotations := make(map[string]string)
+		layer, err := orasrpm.NewGenericRPMMetadata(path, mediatype, annotations)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -387,6 +398,7 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 			if yummeta.DataType(data.Type) == dataType {
 				_, layerDigest := layer.Digest()
 				data.Location.Href = fmt.Sprintf("repodata/%s-%s", layerDigest, sqliteFile)
+				annotations[imagespec.AnnotationTitle] = filepath.Base(data.Location.Href)
 				break
 			}
 		}
@@ -405,7 +417,8 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 			return err
 		}
 
-		layer, err := orasrpm.NewGenericRPMMetadata(path, orasrpm.GetRepomdDataLayerType(extraMetadata.Type), nil)
+		annotations := make(map[string]string)
+		layer, err := orasrpm.NewGenericRPMMetadata(path, orasrpm.GetRepomdDataLayerType(extraMetadata.Type), annotations)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -433,6 +446,8 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 		}
 
 		repomdRoot.Data = append(repomdRoot.Data, repomdData)
+
+		annotations[imagespec.AnnotationTitle] = filepath.Base(repomdData.Location.Href)
 	}
 
 	if err := r.save(repomdRoot); err != nil {

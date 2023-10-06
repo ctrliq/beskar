@@ -34,7 +34,7 @@ func TestSyncer(t *testing.T) {
 	require.NoError(t, s.Err())
 	require.Equal(t, totalPackages, packageCount)
 
-	_ = s.DownloadExtraMetadata(context.Background(), func(dataType string, checksum string) bool {
+	_ = s.DownloadMetadata(context.Background(), func(dataType string, checksum string) bool {
 		return true
 	})
 

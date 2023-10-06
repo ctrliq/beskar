@@ -295,12 +295,16 @@ func (h *Handler) setReposync(reposync *yumdb.Reposync) {
 	h.reposync.Store(&rs)
 }
 
-func (h *Handler) updateSyncing(b bool) *yumdb.Reposync {
+func (h *Handler) updateSyncing(syncing bool) *yumdb.Reposync {
 	reposync := *h.getReposync()
-	reposync.Syncing = b
-	h.syncing.Store(b)
-	if b {
-		reposync.LastSyncTime = time.Now().UTC().Unix()
+	previousSyncing := reposync.Syncing
+	reposync.Syncing = syncing
+	h.syncing.Store(syncing)
+	if syncing && !previousSyncing {
+		reposync.StartTime = time.Now().UTC().Unix()
+		reposync.SyncError = ""
+	} else if !syncing && previousSyncing {
+		reposync.EndTime = time.Now().UTC().Unix()
 	}
 	h.reposync.Store(&reposync)
 	return &reposync
@@ -451,8 +455,10 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Sema
 		}
 	}
 
-	err := h.generateAndPushMetadata(processContext)
-	if err != nil {
-		h.logger.Error("generate/push metadata", "error", err.Error())
+	if !h.getMirror() {
+		err := h.generateAndPushMetadata(processContext)
+		if err != nil {
+			h.logger.Error("generate/push metadata", "error", err.Error())
+		}
 	}
 }

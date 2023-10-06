@@ -1,13 +1,11 @@
 {
     "routes": [
         {
-            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repodata/([^/]+)$",
-            "md5": false,
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/repodata/([^/]+)$",
             "blobtype": "repodata"
         },
         {
-            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/Packages/[a-z0-9]/([^/]+)$",
-            "md5": true,
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/.*?([^/]+\\.[s]?rpm)$",
             "blobtype": "packages"
         },
         {
@@ -22,6 +20,7 @@
     ],
     "mediatype": {
         "rpm": "application/vnd.ciq.rpm.package.v1.rpm",
-        "repomd": "application/vnd.ciq.rpm.repomd.v1.xml"
+        "repomd": "application/vnd.ciq.rpm.repomd.v1.xml",
+        "repomdasc": "application/vnd.ciq.rpm.repomd.v1.xml.asc"
     }
 }

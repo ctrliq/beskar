@@ -177,9 +177,11 @@ func (h *Handler) GetRepositorySyncStatus(context.Context) (syncStatus *apiv1.Sy
 	reposync := h.getReposync()
 	return &apiv1.SyncStatus{
 		Syncing:        reposync.Syncing,
-		LastSyncTime:   time.Unix(reposync.LastSyncTime, 0).Format(timeFormat),
+		StartTime:      timeToString(reposync.StartTime),
+		EndTime:        timeToString(reposync.EndTime),
 		TotalPackages:  reposync.TotalPackages,
 		SyncedPackages: reposync.SyncedPackages,
+		SyncError:      reposync.SyncError,
 	}, nil
 }
 
@@ -197,7 +199,7 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 		logs = append(logs, apiv1.RepositoryLog{
 			Level:   log.Level,
 			Message: log.Message,
-			Date:    time.Unix(log.Date, 0).Format(timeFormat),
+			Date:    timeToString(log.Date),
 		})
 		return nil
 	})
@@ -260,8 +262,8 @@ func toRepositoryPackageAPI(pkg *yumdb.RepositoryPackage) *apiv1.RepositoryPacka
 		Tag:          pkg.Tag,
 		ID:           pkg.ID,
 		Name:         pkg.Name,
-		UploadTime:   time.Unix(pkg.UploadTime, 0).Format(timeFormat),
-		BuildTime:    time.Unix(pkg.BuildTime, 0).Format(timeFormat),
+		UploadTime:   timeToString(pkg.UploadTime),
+		BuildTime:    timeToString(pkg.BuildTime),
 		Size:         pkg.Size,
 		Architecture: pkg.Architecture,
 		SourceRPM:    pkg.SourceRPM,
@@ -275,4 +277,11 @@ func toRepositoryPackageAPI(pkg *yumdb.RepositoryPackage) *apiv1.RepositoryPacka
 		Verified:     pkg.Verified,
 		GPGSignature: pkg.GPGSignature,
 	}
+}
+
+func timeToString(t int64) string {
+	if t == 0 {
+		return ""
+	}
+	return time.Unix(t, 0).Format(timeFormat)
 }

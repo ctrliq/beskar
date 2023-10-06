@@ -49,13 +49,13 @@ func (bpc bufPoolCloser) Close() error {
 	return nil
 }
 
-var ociBlobDigestBuiltin = rego.Function2(
+var ociBlobDigestBuiltin = rego.Function3(
 	&rego.Function{
 		Name:             "oci.blob_digest",
-		Decl:             types.NewFunction(types.Args(types.S, types.S), types.S),
+		Decl:             types.NewFunction(types.Args(types.S, types.S, types.S), types.S),
 		Nondeterministic: true,
 	},
-	func(bctx rego.BuiltinContext, a, b *ast.Term) (term *ast.Term, errFn error) {
+	func(bctx rego.BuiltinContext, a, b, c *ast.Term) (term *ast.Term, errFn error) {
 		funcContext, ok := bctx.Context.Value(&funcContextKey).(*funcContext)
 		if !ok {
 			bctx.Cancel.Cancel()
@@ -73,9 +73,13 @@ var ociBlobDigestBuiltin = rego.Function2(
 		if !ok {
 			return nil, fmt.Errorf("oci reference is not a string")
 		}
-		astMediaType, ok := b.Value.(ast.String)
+		astSearchType, ok := b.Value.(ast.String)
 		if !ok {
-			return nil, fmt.Errorf("oci layer mediatype is not a string")
+			return nil, fmt.Errorf("oci search type is not a string")
+		}
+		astSearchValue, ok := c.Value.(ast.String)
+		if !ok {
+			return nil, fmt.Errorf("oci search value is not a string")
 		}
 
 		ref := string(astRef)
@@ -118,12 +122,26 @@ var ociBlobDigestBuiltin = rego.Function2(
 			return nil, err
 		}
 
-		mediaType := regtypes.MediaType(astMediaType)
-		for _, layer := range manifest.Layers {
-			if layer.MediaType != mediaType {
-				continue
+		switch astSearchType {
+		case "annotation":
+			annotation := strings.SplitN(string(astSearchValue), "=", 2)
+			if len(annotation) != 2 {
+				return nil, fmt.Errorf("bad annotation format: not key=val")
 			}
-			return ast.StringTerm(layer.Digest.Hex), nil
+			for _, layer := range manifest.Layers {
+				if layer.Annotations[annotation[0]] != annotation[1] {
+					continue
+				}
+				return ast.StringTerm(layer.Digest.Hex), nil
+			}
+		case "mediatype":
+			mediaType := regtypes.MediaType(astSearchValue)
+			for _, layer := range manifest.Layers {
+				if layer.MediaType != mediaType {
+					continue
+				}
+				return ast.StringTerm(layer.Digest.Hex), nil
+			}
 		}
 
 		return ast.StringTerm(""), nil
