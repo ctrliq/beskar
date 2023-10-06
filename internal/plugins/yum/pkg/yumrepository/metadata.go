@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -78,11 +77,6 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 	_, err = io.Copy(io.Discard, rc)
 	if err != nil {
 		return fmt.Errorf("while computing %s extra metadata checksums: %w", dataType, err)
-	}
-
-	idx := strings.IndexByte(metadataFilename, '.')
-	if idx >= 0 {
-		metadataFilename = fmt.Sprintf("%s%s", dataType, metadataFilename[idx:])
 	}
 
 	extraMetadata := &yumdb.ExtraMetadata{

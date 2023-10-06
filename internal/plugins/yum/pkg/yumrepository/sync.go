@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/oras"
@@ -27,7 +29,12 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 			sem.Release(syncMaxDownloads)
 		}
 
-		_ = h.updateSyncing(false)
+		reposync = h.updateSyncing(false)
+		if errFn != nil {
+			reposync.SyncError = errFn.Error()
+		} else {
+			reposync.SyncError = ""
+		}
 		if err := h.updateReposyncDatabase(dbCtx, reposync); err != nil {
 			if errFn == nil {
 				errFn = err
@@ -46,7 +53,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 	}
 	defer repoDB.Close(false)
 
-	syncer := mirror.NewSyncer(h.downloadDir(), h.getMirrorURLs())
+	syncer := mirror.NewSyncer(h.downloadDir(), h.getMirrorURLs(), mirror.WithKeyring(h.getKeyring()))
 
 	syncMutex := sync.Mutex{}
 
@@ -69,46 +76,31 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 			rc, err := syncer.FileReader(ctx, path)
 			if err != nil {
 				h.logger.Error("package download", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download: %s", path, err)
+				h.logDatabase(dbCtx, yumdb.LogError, "package %s retrieval: %s", path, err)
 				return
 			}
 			defer rc.Close()
 
-			filename := filepath.Join(h.downloadDir(), filepath.Base(path))
-			pkg, err := os.Create(filename)
-			if err != nil {
-				h.logger.Error("package create", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (create): %s", path, err)
-				return
-			}
-
-			_, err = io.Copy(pkg, rc)
-			closeErr := pkg.Close()
-
-			if err != nil {
-				_ = os.Remove(filename)
+			fullPath := filepath.Join(h.downloadDir(), filepath.Base(path))
+			if err := copyTo(rc, fullPath); err != nil {
+				_ = os.Remove(fullPath)
 				h.logger.Error("package copy", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (copy): %s", path, err)
-				return
-			} else if closeErr != nil {
-				_ = os.Remove(filename)
-				h.logger.Error("package flush", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (close): %s", path, err)
+				h.logDatabase(dbCtx, yumdb.LogError, "package %s copy: %s", path, err)
 				return
 			}
 
-			pusher, err := orasrpm.NewRPMPusher(filename, h.Repository, h.Params.NameOptions...)
+			pusher, err := orasrpm.NewRPMPusher(fullPath, h.Repository, h.Params.NameOptions...)
 			if err != nil {
-				_ = os.Remove(filename)
+				_ = os.Remove(fullPath)
 				h.logger.Error("package push prepare", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (init push): %s", path, err)
+				h.logDatabase(dbCtx, yumdb.LogError, "package %s push initialization: %s", path, err)
 				return
 			}
 
 			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
-				_ = os.Remove(filename)
+				_ = os.Remove(fullPath)
 				h.logger.Error("package push", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (push): %s", path, err)
+				h.logDatabase(dbCtx, yumdb.LogError, "package %s push: %s", path, err)
 				return
 			}
 
@@ -116,8 +108,8 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 			syncedPackages++
 			reposync, err := h.addSyncedPackageReposyncDatabase(dbCtx, syncedPackages, totalPackages)
 			if err != nil {
-				h.logger.Error("package push", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (push): %s", path, err)
+				h.logger.Error("reposync status update", "package", path, "error", err.Error())
+				h.logDatabase(dbCtx, yumdb.LogError, "reposync status update for %s: %s", path, err)
 			} else {
 				h.setReposync(reposync)
 			}
@@ -129,89 +121,128 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 		return err
 	}
 
-	metaDB, err := h.getMetadataDB(dbCtx)
+	pushRef, err := name.ParseReference(
+		filepath.Join(h.Repository, "repodata:"+RepomdXMLTag),
+		h.Params.NameOptions...,
+	)
 	if err != nil {
 		return err
 	}
-	defer metaDB.Close(false)
 
-	extras := make(map[string]string)
+	metadataDir := filepath.Join(h.downloadDir(), "metadata")
+	if err := os.MkdirAll(metadataDir, 0o700); err != nil {
+		return err
+	}
+	defer os.RemoveAll(metadataDir)
 
-	err = metaDB.WalkExtraMetadata(ctx, func(em *yumdb.ExtraMetadata) error {
-		extras[em.Type] = em.Checksum
-		return nil
+	metadataCount := 1
+
+	metadatas := syncer.DownloadMetadata(ctx, func(dataType string, checksum string) bool {
+		metadataCount++
+		return true
 	})
-	if err != nil {
+
+	metadataLayers := make([]oras.Layer, 0, metadataCount)
+
+	repomdXMLPath := filepath.Join(metadataDir, "repomd.xml")
+
+	if err := copyTo(syncer.RepomdXML(), repomdXMLPath); err != nil {
+		h.logger.Error("repomd.xml copy", "metadata", repomdXMLPath, "error", err.Error())
+		h.logDatabase(dbCtx, yumdb.LogError, "%s metadata copy: %s", repomdXMLPath, err)
 		return err
 	}
 
-	extraMetadatas := syncer.DownloadExtraMetadata(ctx, func(dataType string, checksum string) bool {
-		extraChecksum, ok := extras[dataType]
-		if !ok {
-			return true
+	repomdXML, err := orasrpm.NewGenericRPMMetadata(repomdXMLPath, orasrpm.RepomdXMLLayerType, nil)
+	if err != nil {
+		h.logger.Error("metadata push initialization", "metadata", repomdXMLPath, "error", err.Error())
+		h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", repomdXMLPath, err)
+		return err
+	}
+
+	metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(repomdXML))
+
+	if sigReader := syncer.RepomdXMLSignature(); sigReader != nil {
+		repomdXMLSignaturePath := filepath.Join(metadataDir, "repomd.xml.asc")
+
+		if err := copyTo(sigReader, repomdXMLSignaturePath); err != nil {
+			h.logger.Error("metadata copy", "metadata", repomdXMLSignaturePath, "error", err.Error())
+			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata copy: %s", repomdXMLSignaturePath, err)
+			return err
 		}
-		return extraChecksum != checksum
-	})
 
-	for idx := range extraMetadatas {
+		repomdXMLSignature, err := orasrpm.NewGenericRPMMetadata(
+			repomdXMLSignaturePath,
+			orasrpm.RepomdXMLSignatureLayerType,
+			nil,
+		)
+		if err != nil {
+			h.logger.Error("metadata push initialization", "metadata", repomdXMLSignaturePath, "error", err.Error())
+			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", repomdXMLSignaturePath, err)
+			return err
+		}
+
+		metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(repomdXMLSignature))
+	}
+
+	for idx := range metadatas {
 		repomdData := syncer.RepomdData(idx)
 		if repomdData == nil {
 			continue
 		}
 
-		if err := sem.Acquire(ctx, 1, time.Minute); err != nil {
+		path := repomdData.Location.Href
+		rc, err := syncer.FileReader(ctx, path)
+		if err != nil {
+			h.logger.Error("metadata download", "metadata", path, "error", err.Error())
+			h.logDatabase(dbCtx, yumdb.LogError, "metadata %s retrieval: %s", path, err)
 			return err
 		}
 
-		go func() {
-			path := repomdData.Location.Href
-			rc, err := syncer.FileReader(ctx, path)
-			if err != nil {
-				h.logger.Error("metadata download", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download: %s", path, err)
-				return
-			}
-			defer rc.Close()
+		fullPath := filepath.Join(metadataDir, filepath.Base(path))
 
-			filename := filepath.Join(h.downloadDir(), filepath.Base(path))
-			pkg, err := os.Create(filename)
-			if err != nil {
-				h.logger.Error("metadata create", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (create): %s", path, err)
-				return
-			}
+		err = copyTo(rc, fullPath)
+		_ = rc.Close()
+		if err != nil {
+			h.logger.Error("metadata copy", "metadata", path, "error", err.Error())
+			h.logDatabase(dbCtx, yumdb.LogError, "metadata %s copy: %s", path, err)
+			return err
+		}
 
-			_, err = io.Copy(pkg, rc)
-			closeErr := pkg.Close()
-
-			if err != nil {
-				_ = os.Remove(filename)
-				h.logger.Error("metadata copy", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (copy): %s", path, err)
-				return
-			} else if closeErr != nil {
-				_ = os.Remove(filename)
-				h.logger.Error("metadata flush", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (close): %s", path, err)
-				return
-			}
-
-			pusher, err := orasrpm.NewRPMExtraMetadataPusher(filename, h.Repository, repomdData.Type, h.Params.NameOptions...)
-			if err != nil {
-				_ = os.Remove(filename)
-				h.logger.Error("metadata push prepare", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (init push): %s", path, err)
-				return
-			}
-
-			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
-				_ = os.Remove(filename)
-				h.logger.Error("metadata push", "metadata", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (push): %s", path, err)
-				return
-			}
-		}()
+		mediatype := orasrpm.GetRepomdDataLayerType(repomdData.Type)
+		annotations := map[string]string{
+			imagespec.AnnotationTitle: filepath.Base(fullPath),
+		}
+		metadataLayer, err := orasrpm.NewGenericRPMMetadata(fullPath, mediatype, annotations)
+		if err != nil {
+			h.logger.Error("metadata push initialization", "metadata", fullPath, "error", err.Error())
+			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", fullPath, err)
+		}
+		metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(metadataLayer))
 	}
 
-	return syncer.Err()
+	if err := syncer.Err(); err != nil {
+		return err
+	}
+
+	return oras.Push(
+		orasrpm.NewRPMMetadataPusher(pushRef, orasrpm.RepomdConfigType, metadataLayers...),
+		h.Params.RemoteOptions...,
+	)
+}
+
+func copyTo(src io.Reader, dest string) error {
+	pkg, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(pkg, src)
+	closeErr := pkg.Close()
+	if err != nil {
+		return err
+	} else if closeErr != nil {
+		return closeErr
+	}
+
+	return nil
 }

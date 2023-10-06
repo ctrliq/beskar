@@ -4,8 +4,10 @@
 package mirror
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +17,9 @@ import (
 
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yummeta"
 	"go.ciq.dev/beskar/pkg/decompress"
+
+	"golang.org/x/crypto/openpgp"                  //nolint:staticcheck
+	pgperrors "golang.org/x/crypto/openpgp/errors" //nolint:staticcheck
 )
 
 type Syncer struct {
@@ -25,6 +30,10 @@ type Syncer struct {
 	httpsProxy  *url.URL
 	err         error
 	repomdRoot  *yummeta.RepoMdRoot
+	keyring     openpgp.KeyRing
+
+	repomdXML          []byte
+	repomdXMLSignature []byte
 }
 
 type SyncerOption func(*Syncer)
@@ -42,6 +51,12 @@ func WithProxyURL(proxy *url.URL, httpsProxy bool) SyncerOption {
 		} else {
 			s.httpProxy = proxy
 		}
+	}
+}
+
+func WithKeyring(keyring openpgp.KeyRing) SyncerOption {
+	return func(s *Syncer) {
+		s.keyring = keyring
 	}
 }
 
@@ -149,7 +164,7 @@ func (s *Syncer) DownloadPackages(ctx context.Context, packageFilterFn PackageFi
 
 type ExtraMetadataFilter func(dataType string, checksum string) bool
 
-func (s *Syncer) DownloadExtraMetadata(ctx context.Context, extraMetadataFilterFn ExtraMetadataFilter) <-chan int {
+func (s *Syncer) DownloadMetadata(ctx context.Context, extraMetadataFilterFn ExtraMetadataFilter) <-chan int {
 	metadataCh := make(chan int)
 
 	go func() {
@@ -161,14 +176,8 @@ func (s *Syncer) DownloadExtraMetadata(ctx context.Context, extraMetadataFilterF
 		}
 
 		for idx, data := range s.repomdRoot.Data {
-			switch yummeta.DataType(data.Type) {
-			case yummeta.FilelistsDataType, yummeta.FilelistsDatabaseDataType:
-			case yummeta.PrimaryDataType, yummeta.PrimaryDatabaseDataType:
-			case yummeta.OtherDataType, yummeta.OtherDatabaseDataType:
-			default:
-				if extraMetadataFilterFn(data.Type, data.Checksum.Value) {
-					metadataCh <- idx
-				}
+			if extraMetadataFilterFn(data.Type, data.Checksum.Value) {
+				metadataCh <- idx
 			}
 		}
 	}()
@@ -183,18 +192,70 @@ func (s *Syncer) RepomdData(index int) *yummeta.RepoMdData {
 	return s.repomdRoot.Data[index]
 }
 
+func (s *Syncer) RepomdXML() io.Reader {
+	return bytes.NewReader(s.repomdXML)
+}
+
+func (s *Syncer) RepomdXMLSignature() io.Reader {
+	if s.repomdXMLSignature == nil {
+		return nil
+	}
+	return bytes.NewReader(s.repomdXMLSignature)
+}
+
 func (s *Syncer) initRepomdXML(ctx context.Context) error {
 	if s.repomdRoot != nil {
 		return nil
 	}
 
+	buf := new(bytes.Buffer)
+
 	rc, err := s.FileReader(ctx, "repodata/repomd.xml")
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
 
-	s.repomdRoot, err = yummeta.ParseRepomd(rc)
+	_, err = io.Copy(buf, rc)
+	_ = rc.Close()
+
+	if err != nil {
+		return err
+	}
+
+	s.repomdXML = make([]byte, buf.Len())
+	copy(s.repomdXML, buf.Bytes())
+	buf.Reset()
+
+	if s.keyring != nil {
+		rc, err = s.FileReader(ctx, "repodata/repomd.xml.asc")
+		if err == nil {
+			_, err = io.Copy(buf, rc)
+			_ = rc.Close()
+
+			if err != nil {
+				return err
+			}
+
+			s.repomdXMLSignature = make([]byte, buf.Len())
+			copy(s.repomdXMLSignature, buf.Bytes())
+
+			signer, err := openpgp.CheckArmoredDetachedSignature(
+				s.keyring,
+				s.RepomdXML(),
+				s.RepomdXMLSignature(),
+			)
+
+			if errors.Is(err, pgperrors.ErrUnknownIssuer) {
+				return fmt.Errorf("repomd.xml.asc: GPG signature validation failed")
+			} else if err != nil {
+				return fmt.Errorf("repomd.xml.asc: %w", err)
+			} else if len(signer.Identities) == 0 {
+				return fmt.Errorf("repomd.xml.asc: no identity found in public key")
+			}
+		}
+	}
+
+	s.repomdRoot, err = yummeta.ParseRepomd(s.RepomdXML())
 	if err != nil {
 		return err
 	}

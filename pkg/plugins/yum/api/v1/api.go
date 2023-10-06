@@ -53,9 +53,11 @@ type RepositoryPackage struct {
 // Mirror sync status.
 type SyncStatus struct {
 	Syncing        bool   `json:"syncing"`
-	LastSyncTime   string `json:"last_sync_time"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
 	TotalPackages  int    `json:"total_packages"`
 	SyncedPackages int    `json:"synced_packages"`
+	SyncError      string `json:"sync_error"`
 }
 
 // YUM is used for managing YUM repositories.

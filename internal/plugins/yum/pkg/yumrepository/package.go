@@ -55,14 +55,17 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 	if err != nil {
 		return fmt.Errorf("while validating package %s: %w", packageName, err)
 	}
-	packageMetadata, err := extractPackageXMLMetadata(packageLayer.Digest.Hex, packagePath)
-	if err != nil {
-		return fmt.Errorf("while extracting package %s metadata: %w", packageName, err)
-	}
 
-	err = h.addPackageToMetadataDatabase(ctx, packageMetadata)
-	if err != nil {
-		return fmt.Errorf("while adding package %s to database: %w", packageName, err)
+	if !h.getMirror() {
+		packageMetadata, err := extractPackageXMLMetadata(packageLayer.Digest.Hex, packagePath)
+		if err != nil {
+			return fmt.Errorf("while extracting package %s metadata: %w", packageName, err)
+		}
+
+		err = h.addPackageToMetadataDatabase(ctx, packageMetadata)
+		if err != nil {
+			return fmt.Errorf("while adding package %s to database: %w", packageName, err)
+		}
 	}
 
 	err = h.addPackageToRepositoryDatabase(ctx, repositoryPackage)

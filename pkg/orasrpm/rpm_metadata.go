@@ -19,10 +19,11 @@ import (
 )
 
 const (
-	RepomdConfigType          = "application/vnd.ciq.rpm.repomd.v1.config+json"
-	RepomdXMLLayerType        = "application/vnd.ciq.rpm.repomd.v1.xml"
-	RepomdDataConfigType      = "application/vnd.ciq.rpm.repomd.extra.v1.config+xml"
-	RepomdDataLayerTypeFormat = "application/vnd.ciq.rpm.repomd.extra.v1.%s"
+	RepomdConfigType            = "application/vnd.ciq.rpm.repomd.v1.config+json"
+	RepomdXMLLayerType          = "application/vnd.ciq.rpm.repomd.v1.xml"
+	RepomdXMLSignatureLayerType = "application/vnd.ciq.rpm.repomd.v1.xml.asc"
+	RepomdDataConfigType        = "application/vnd.ciq.rpm.repomd.extra.v1.config+xml"
+	RepomdDataLayerTypeFormat   = "application/vnd.ciq.rpm.repomd.extra.v1.%s"
 )
 
 func GetRepomdDataLayerType(dataType string) string {

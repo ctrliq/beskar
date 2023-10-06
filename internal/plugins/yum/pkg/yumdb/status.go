@@ -31,10 +31,12 @@ type Properties struct {
 }
 
 type Reposync struct {
-	Syncing        bool  `db:"syncing"`
-	LastSyncTime   int64 `db:"last_sync_time"`
-	TotalPackages  int   `db:"total_packages"`
-	SyncedPackages int   `db:"synced_packages"`
+	Syncing        bool   `db:"syncing"`
+	StartTime      int64  `db:"start_time"`
+	EndTime        int64  `db:"end_time"`
+	TotalPackages  int    `db:"total_packages"`
+	SyncedPackages int    `db:"synced_packages"`
+	SyncError      string `db:"sync_error"`
 }
 
 type StatusDB struct {
@@ -254,7 +256,7 @@ func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 
 	rows, err := db.QueryxContext(
 		ctx,
-		"SELECT syncing, last_sync_time, total_packages, synced_packages FROM reposync WHERE id = 1",
+		"SELECT syncing, start_time, end_time, total_packages, synced_packages, sync_error FROM reposync WHERE id = 1",
 	)
 	if err != nil {
 		return nil, err
@@ -284,8 +286,8 @@ func (db *StatusDB) UpdateReposync(ctx context.Context, reposync *Reposync) erro
 	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
-		"UPDATE reposync SET syncing = :syncing, last_sync_time = :last_sync_time, "+
-			"total_packages = :total_packages, synced_packages = :synced_packages "+
+		"UPDATE reposync SET syncing = :syncing, start_time = :start_time, end_time = :end_time, "+
+			"total_packages = :total_packages, synced_packages = :synced_packages, sync_error = :sync_error "+
 			"WHERE id = 1",
 		reposync,
 	)
