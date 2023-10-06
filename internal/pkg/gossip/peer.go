@@ -15,7 +15,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
-	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/pkg/mtls"
 	"go.ciq.dev/beskar/pkg/netutil"
 	v1 "k8s.io/api/core/v1"
@@ -32,7 +31,7 @@ const (
 	namespaceFile  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
-func Start(gossipConfig config.Gossip, meta *BeskarMeta, client kubernetes.Interface, timeout time.Duration) (*Member, error) {
+func Start(gossipConfig Config, meta *BeskarMeta, client kubernetes.Interface, timeout time.Duration) (*Member, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -72,7 +71,7 @@ func Start(gossipConfig config.Gossip, meta *BeskarMeta, client kubernetes.Inter
 	)
 }
 
-func getKey(gossipConfig config.Gossip) ([]byte, error) {
+func getKey(gossipConfig Config) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(gossipConfig.Key)
 }
 
@@ -90,7 +89,7 @@ func getState(numPeers int) ([]byte, error) {
 	return nil, nil
 }
 
-func getPeers(gossipConfig config.Gossip, client kubernetes.Interface, timeout time.Duration) ([]string, error) {
+func getPeers(gossipConfig Config, client kubernetes.Interface, timeout time.Duration) ([]string, error) {
 	if !runInKubernetes {
 		return gossipConfig.Peers, nil
 	}

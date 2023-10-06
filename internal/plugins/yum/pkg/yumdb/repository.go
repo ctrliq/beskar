@@ -7,25 +7,14 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"embed"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"sync/atomic"
 
-	"github.com/adlio/schema"
-	"github.com/jmoiron/sqlx"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	"gocloud.dev/blob"
 )
 
-const (
-	repositoryDBFile           = "repository.db"
-	repositoryDBCompressedFile = "repository.db.lz4"
-)
-
 //go:embed schema/repository/*.sql
-var RepositorySchemas embed.FS
+var repositorySchemas embed.FS
 
 type RepositoryPackage struct {
 	Tag          string `db:"tag"`
@@ -48,123 +37,31 @@ type RepositoryPackage struct {
 }
 
 type RepositoryDB struct {
-	*sqlx.DB
-	reference  atomic.Int32
-	mutex      sync.RWMutex
-	bucket     *blob.Bucket
-	dataDir    string
-	repository string
+	*sqlite.DB
 }
 
 func OpenRepositoryDB(ctx context.Context, bucket *blob.Bucket, dataDir string, repository string) (*RepositoryDB, error) {
-	repoDB := &RepositoryDB{
-		bucket:     bucket,
-		dataDir:    dataDir,
-		repository: repository,
-	}
-
-	if err := repoDB.open(ctx); err != nil {
+	db, err := sqlite.New(ctx, "repository", sqlite.Storage{
+		Bucket:             bucket,
+		DataDir:            dataDir,
+		Repository:         repository,
+		SchemaFS:           repositorySchemas,
+		SchemaGlob:         "schema/repository/*.sql",
+		Filename:           "repository.db",
+		CompressedFilename: "repository.db.lz4",
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	migrations, err := schema.FSMigrations(RepositorySchemas, "schema/repository/*.sql")
-	if err != nil {
-		return nil, fmt.Errorf("while setting repository DB migration: %w", err)
-	}
-
-	migrator := schema.NewMigrator(schema.WithDialect(schema.SQLite))
-	if err := migrator.Apply(repoDB.DB, migrations); err != nil {
-		return nil, fmt.Errorf("while applying repository DB migration: %w", err)
-	}
-
-	return repoDB, nil
-}
-
-func (db *RepositoryDB) open(ctx context.Context) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil {
-		return nil
-	}
-
-	key := filepath.Join(db.repository, repositoryDBCompressedFile)
-
-	dbPath := db.Path()
-	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0o700); err != nil {
-		return fmt.Errorf("while creating database directory %s: %w", dbDir, err)
-	}
-
-	_, err := os.Stat(dbPath)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		remoteReader, err := db.bucket.NewReader(ctx, key, &blob.ReaderOptions{})
-		if err == nil {
-			defer remoteReader.Close()
-
-			if err := pull(dbPath, remoteReader); err != nil {
-				return fmt.Errorf("while pulling repository DB: %w", err)
-			}
-		}
-	} else if err != nil {
-		return err
-	}
-
-	db.DB, err = sqlx.Open(driverName, dbPath)
-	if err != nil {
-		return fmt.Errorf("while opening repository DB %s: %w", dbPath, err)
-	}
-	db.SetMaxOpenConns(1)
-
-	return nil
-}
-
-func (db *RepositoryDB) Path() string {
-	return filepath.Join(db.dataDir, db.repository, repositoryDBFile)
-}
-
-func (db *RepositoryDB) Sync(ctx context.Context) error {
-	key := filepath.Join(db.repository, repositoryDBCompressedFile)
-
-	remoteWriter, err := db.bucket.NewWriter(ctx, key, &blob.WriterOptions{})
-	if err != nil {
-		return fmt.Errorf("while initializing object store writer: %w", err)
-	}
-
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if err := push(db.Path(), remoteWriter); err != nil {
-		_ = remoteWriter.Close()
-		return fmt.Errorf("while pushing repository database to object store: %w", err)
-	}
-
-	return remoteWriter.Close()
-}
-
-func (db *RepositoryDB) Close(removeDB bool) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil && db.reference.Load() == 0 {
-		err := db.DB.Close()
-		db.DB = nil
-		if removeDB {
-			if removeErr := os.Remove(db.Path()); removeErr != nil && err == nil {
-				err = removeErr
-			}
-		}
-		return err
-	}
-
-	return nil
+	return &RepositoryDB{db}, nil
 }
 
 func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
@@ -177,7 +74,7 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 	//nolint:gosec
 	pkg.Tag = fmt.Sprintf("%x", md5.Sum([]byte(rpmName)))
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"INSERT INTO packages VALUES(:tag, :id, :name, :upload_time, :build_time, :size, :architecture, :source_rpm, "+
@@ -188,7 +85,7 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 			"description = :description, gpg_signature = :gpg_signature",
 		pkg,
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -205,10 +102,10 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 }
 
 func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryPackage, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return nil, err
 	}
 
@@ -236,10 +133,10 @@ func (db *RepositoryDB) WalkPackages(ctx context.Context, walkFn WalkPackageFunc
 		return fmt.Errorf("no package walk function provided")
 	}
 
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
@@ -263,10 +160,10 @@ func (db *RepositoryDB) WalkPackages(ctx context.Context, walkFn WalkPackageFunc
 }
 
 func (db *RepositoryDB) HasPackageID(ctx context.Context, id string) (bool, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return false, err
 	}
 

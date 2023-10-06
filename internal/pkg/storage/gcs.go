@@ -7,7 +7,6 @@ import (
 	"context"
 	"os"
 
-	"go.ciq.dev/beskar/internal/pkg/config"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/gcsblob"
 	"gocloud.dev/gcp"
@@ -15,8 +14,8 @@ import (
 	storagev1 "google.golang.org/api/storage/v1"
 )
 
-func initGCS(ctx context.Context, storageConfig config.BeskarYumGCSStorage, prefix string) (*blob.Bucket, error) {
-	data, err := os.ReadFile(storageConfig.Keyfile)
+func initGCS(ctx context.Context, config GCSStorageConfig, prefix string) (*blob.Bucket, error) {
+	data, err := os.ReadFile(config.Keyfile)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +32,7 @@ func initGCS(ctx context.Context, storageConfig config.BeskarYumGCSStorage, pref
 		return nil, err
 	}
 
-	bucket, err := gcsblob.OpenBucket(ctx, client, storageConfig.Bucket, nil)
+	bucket, err := gcsblob.OpenBucket(ctx, client, config.Bucket, nil)
 	if err != nil {
 		return nil, err
 	}

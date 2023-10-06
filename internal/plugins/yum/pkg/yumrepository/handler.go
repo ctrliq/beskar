@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"bytes"
@@ -16,39 +16,21 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"go.ciq.dev/beskar/internal/pkg/repository"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/orasrpm"
-	"gocloud.dev/blob"
 	"golang.org/x/crypto/openpgp"       //nolint:staticcheck
 	"golang.org/x/crypto/openpgp/armor" //nolint:staticcheck
 )
 
-type HandlerParams struct {
-	Dir           string
-	Bucket        *blob.Bucket
-	RemoteOptions []remote.Option
-	NameOptions   []name.Option
-	Remove        func(string)
-}
-
 type Handler struct {
-	cancel context.CancelFunc
+	*repository.RepoHandler
 
-	repository string
-	repoDir    string
-	params     *HandlerParams
-
-	queue      []*eventv1.EventPayload
-	queueMutex sync.RWMutex
-	queued     chan struct{}
-
-	stopped atomic.Bool
+	repoDir string
 
 	logger *slog.Logger
 
@@ -68,22 +50,13 @@ type Handler struct {
 	mirrorURLs    []*url.URL
 }
 
-func NewHandler(logger *slog.Logger, repository string, params *HandlerParams) *Handler {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	handler := &Handler{
-		cancel:     cancel,
-		repository: repository,
-		repoDir:    filepath.Join(params.Dir, repository),
-		params:     params,
-		logger:     logger,
-		queued:     make(chan struct{}, 1),
-		syncCh:     make(chan struct{}, 1),
+func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handler {
+	return &Handler{
+		RepoHandler: repoHandler,
+		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
+		logger:      logger,
+		syncCh:      make(chan struct{}, 1),
 	}
-
-	handler.start(ctx)
-
-	return handler
 }
 
 func (h *Handler) downloadDir() string {
@@ -113,20 +86,9 @@ func (h *Handler) QueueEvent(event *eventv1.EventPayload, store bool) error {
 
 	h.logger.Info("queued event", "digest", event.Digest)
 
-	h.queueMutex.Lock()
-	h.queue = append(h.queue, event)
-	h.queueMutex.Unlock()
-
-	h.notifyQueue()
+	h.EnqueueEvent(event)
 
 	return nil
-}
-
-func (h *Handler) notifyQueue() {
-	select {
-	case h.queued <- struct{}{}:
-	default:
-	}
 }
 
 func (h *Handler) getRepositoryDB(ctx context.Context) (*yumdb.RepositoryDB, error) {
@@ -137,7 +99,7 @@ func (h *Handler) getRepositoryDB(ctx context.Context) (*yumdb.RepositoryDB, err
 		return h.repositoryDB, nil
 	}
 
-	db, err := yumdb.OpenRepositoryDB(ctx, h.params.Bucket, h.repoDir, h.repository)
+	db, err := yumdb.OpenRepositoryDB(ctx, h.Params.Bucket, h.repoDir, h.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +116,7 @@ func (h *Handler) getMetadataDB(ctx context.Context) (*yumdb.MetadataDB, error) 
 		return h.metadataDB, nil
 	}
 
-	db, err := yumdb.OpenMetadataDB(ctx, h.params.Bucket, h.repoDir, h.repository)
+	db, err := yumdb.OpenMetadataDB(ctx, h.Params.Bucket, h.repoDir, h.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +133,7 @@ func (h *Handler) getStatusDB(ctx context.Context) (*yumdb.StatusDB, error) {
 		return h.statusDB, nil
 	}
 
-	db, err := yumdb.OpenStatusDB(ctx, h.params.Bucket, h.repoDir, h.repository)
+	db, err := yumdb.OpenStatusDB(ctx, h.Params.Bucket, h.repoDir, h.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +150,7 @@ func (h *Handler) getLogDB(ctx context.Context) (*yumdb.LogDB, error) {
 		return h.logDB, nil
 	}
 
-	db, err := yumdb.OpenLogDB(ctx, h.params.Bucket, h.repoDir, h.repository)
+	db, err := yumdb.OpenLogDB(ctx, h.Params.Bucket, h.repoDir, h.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -215,9 +177,9 @@ func (h *Handler) cleanup() {
 
 	h.dbMutex.Unlock()
 
-	close(h.queued)
+	close(h.Queued)
 	close(h.syncCh)
-	h.params.Remove(h.repository)
+	h.Params.Remove(h.Repository)
 	_ = os.RemoveAll(h.repoDir)
 }
 
@@ -344,7 +306,7 @@ func (h *Handler) updateSyncing(b bool) *yumdb.Reposync {
 	return &reposync
 }
 
-func (h *Handler) start(ctx context.Context) {
+func (h *Handler) Start(ctx context.Context) {
 	if err := os.MkdirAll(h.downloadDir(), 0o700); err != nil {
 		h.cleanup()
 		h.logger.Error("create repository download dir", "error", err.Error())
@@ -408,10 +370,10 @@ func (h *Handler) start(ctx context.Context) {
 	sem := mirror.NewWeighted(syncMaxDownloads)
 
 	go func() {
-		for !h.stopped.Load() {
+		for !h.Stopped.Load() {
 			select {
 			case <-ctx.Done():
-				h.stopped.Store(true)
+				h.Stopped.Store(true)
 			case <-h.syncCh:
 				go func() {
 					err := h.repositorySync(ctx, sem)
@@ -419,11 +381,8 @@ func (h *Handler) start(ctx context.Context) {
 						h.logger.Error("reposistory sync", "error", err.Error())
 					}
 				}()
-			case <-h.queued:
-				h.queueMutex.Lock()
-				events := h.queue
-				h.queue = nil
-				h.queueMutex.Unlock()
+			case <-h.Queued:
+				events := h.DequeueEvents()
 
 				h.processEvents(events, sem)
 
@@ -434,31 +393,13 @@ func (h *Handler) start(ctx context.Context) {
 					lastIndex = nil
 				}
 
-				h.queueMutex.RLock()
-				queueLength := len(h.queue)
-				h.queueMutex.RUnlock()
-
-				if queueLength > 0 {
-					h.notifyQueue()
+				if h.EventQueueLength() > 0 {
+					h.EventQueueUpdate()
 				}
 			}
 		}
 		h.cleanup()
 	}()
-}
-
-func (h *Handler) Started() bool {
-	if h.stopped.Load() {
-		<-h.queued
-		return false
-	}
-	return true
-}
-
-func (h *Handler) Stop() {
-	h.stopped.Store(true)
-	h.cancel()
-	<-h.queued
 }
 
 func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Semaphore) {
@@ -505,7 +446,7 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Sema
 			h.logger.Error("event remove", "error", err.Error())
 		}
 
-		if h.stopped.Load() {
+		if h.Stopped.Load() {
 			break
 		}
 	}

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
-package repository
+package yumrepository
 
 import (
 	"context"
@@ -97,7 +97,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				return
 			}
 
-			pusher, err := orasrpm.NewRPMPusher(filename, h.repository, h.params.NameOptions...)
+			pusher, err := orasrpm.NewRPMPusher(filename, h.Repository, h.Params.NameOptions...)
 			if err != nil {
 				_ = os.Remove(filename)
 				h.logger.Error("package push prepare", "package", path, "error", err.Error())
@@ -105,7 +105,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				return
 			}
 
-			if err := oras.Push(pusher, h.params.RemoteOptions...); err != nil {
+			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
 				_ = os.Remove(filename)
 				h.logger.Error("package push", "package", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "package %s download (push): %s", path, err)
@@ -196,7 +196,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				return
 			}
 
-			pusher, err := orasrpm.NewRPMExtraMetadataPusher(filename, h.repository, repomdData.Type, h.params.NameOptions...)
+			pusher, err := orasrpm.NewRPMExtraMetadataPusher(filename, h.Repository, repomdData.Type, h.Params.NameOptions...)
 			if err != nil {
 				_ = os.Remove(filename)
 				h.logger.Error("metadata push prepare", "metadata", path, "error", err.Error())
@@ -204,7 +204,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				return
 			}
 
-			if err := oras.Push(pusher, h.params.RemoteOptions...); err != nil {
+			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
 				_ = os.Remove(filename)
 				h.logger.Error("metadata push", "metadata", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "metadata %s download (push): %s", path, err)

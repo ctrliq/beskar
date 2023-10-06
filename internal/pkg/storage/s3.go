@@ -6,34 +6,33 @@ package storage
 import (
 	"context"
 
-	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/internal/pkg/s3"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
 )
 
-func initS3(ctx context.Context, storageConfig config.BeskarYumS3Storage, prefix string) (*blob.Bucket, error) {
-	bucketName := storageConfig.Bucket
+func initS3(ctx context.Context, config S3StorageConfig, prefix string) (*blob.Bucket, error) {
+	bucketName := config.Bucket
 
 	opts := []s3.AuthMethodOption{
-		s3.WithDisableSSL(storageConfig.DisableSSL),
+		s3.WithDisableSSL(config.DisableSSL),
 	}
 
-	if storageConfig.AccessKeyID != "" || storageConfig.SecretAccessKey != "" || storageConfig.SessionToken != "" {
+	if config.AccessKeyID != "" || config.SecretAccessKey != "" || config.SessionToken != "" {
 		opts = append(opts,
 			s3.WithCredentials(
-				storageConfig.AccessKeyID,
-				storageConfig.SecretAccessKey,
-				storageConfig.SessionToken,
+				config.AccessKeyID,
+				config.SecretAccessKey,
+				config.SessionToken,
 			))
 	}
 
-	if storageConfig.Region != "" {
-		opts = append(opts, s3.WithRegion(storageConfig.Region))
+	if config.Region != "" {
+		opts = append(opts, s3.WithRegion(config.Region))
 	}
 
 	authMethod, err := s3.NewAuthMethod(
-		storageConfig.Endpoint,
+		config.Endpoint,
 		opts...,
 	)
 	if err != nil {

@@ -6,25 +6,14 @@ package yumdb
 import (
 	"context"
 	"embed"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"sync/atomic"
 
-	"github.com/adlio/schema"
-	"github.com/jmoiron/sqlx"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	"gocloud.dev/blob"
 )
 
-const (
-	metadataDBFile           = "metadata.db"
-	metadataDBCompressedFile = "metadata.db.lz4"
-)
-
 //go:embed schema/metadata/*.sql
-var MetadataSchemas embed.FS
+var metadataSchemas embed.FS
 
 type PackageMetadata struct {
 	Name      string `db:"name"`
@@ -46,134 +35,42 @@ type ExtraMetadata struct {
 }
 
 type MetadataDB struct {
-	*sqlx.DB
-	reference  atomic.Int32
-	mutex      sync.RWMutex
-	bucket     *blob.Bucket
-	dataDir    string
-	repository string
+	*sqlite.DB
 }
 
 func OpenMetadataDB(ctx context.Context, bucket *blob.Bucket, dataDir string, repository string) (*MetadataDB, error) {
-	metadataDB := &MetadataDB{
-		bucket:     bucket,
-		dataDir:    dataDir,
-		repository: repository,
-	}
-
-	if err := metadataDB.open(ctx); err != nil {
+	db, err := sqlite.New(ctx, "metadata", sqlite.Storage{
+		Bucket:             bucket,
+		DataDir:            dataDir,
+		Repository:         repository,
+		SchemaFS:           metadataSchemas,
+		SchemaGlob:         "schema/metadata/*.sql",
+		Filename:           "metadata.db",
+		CompressedFilename: "metadata.db.lz4",
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	migrations, err := schema.FSMigrations(MetadataSchemas, "schema/metadata/*.sql")
-	if err != nil {
-		return nil, fmt.Errorf("while setting metadata DB migration: %w", err)
-	}
-
-	migrator := schema.NewMigrator(schema.WithDialect(schema.SQLite))
-	if err := migrator.Apply(metadataDB.DB, migrations); err != nil {
-		return nil, fmt.Errorf("while applying metadata DB migration: %w", err)
-	}
-
-	return metadataDB, nil
-}
-
-func (db *MetadataDB) open(ctx context.Context) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil {
-		return nil
-	}
-
-	key := filepath.Join(db.repository, metadataDBCompressedFile)
-
-	dbPath := db.Path()
-	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0o700); err != nil {
-		return fmt.Errorf("while creating database directory %s: %w", dbDir, err)
-	}
-
-	_, err := os.Stat(dbPath)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		remoteReader, err := db.bucket.NewReader(ctx, key, &blob.ReaderOptions{})
-		if err == nil {
-			defer remoteReader.Close()
-
-			if err := pull(dbPath, remoteReader); err != nil {
-				return fmt.Errorf("while pulling repository DB: %w", err)
-			}
-		}
-	} else if err != nil {
-		return err
-	}
-
-	db.DB, err = sqlx.Open(driverName, dbPath)
-	if err != nil {
-		return fmt.Errorf("while opening repository DB %s: %w", dbPath, err)
-	}
-	db.SetMaxOpenConns(1)
-
-	return nil
-}
-
-func (db *MetadataDB) Path() string {
-	return filepath.Join(db.dataDir, db.repository, metadataDBFile)
-}
-
-func (db *MetadataDB) Sync(ctx context.Context) error {
-	key := filepath.Join(db.repository, metadataDBCompressedFile)
-
-	remoteWriter, err := db.bucket.NewWriter(ctx, key, &blob.WriterOptions{})
-	if err != nil {
-		return fmt.Errorf("while initializing s3 object writer: %w", err)
-	}
-
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if err := push(db.Path(), remoteWriter); err != nil {
-		_ = remoteWriter.Close()
-		return fmt.Errorf("while pushing metadata database to s3 bucket: %w", err)
-	}
-
-	return remoteWriter.Close()
-}
-
-func (db *MetadataDB) Close(removeDB bool) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
-	if db.DB != nil && db.reference.Load() == 0 {
-		err := db.DB.Close()
-		db.DB = nil
-		if removeDB {
-			if removeErr := os.Remove(db.Path()); removeErr != nil && err == nil {
-				err = removeErr
-			}
-		}
-		return err
-	}
-
-	return nil
+	return &MetadataDB{db}, nil
 }
 
 func (db *MetadataDB) AddPackage(ctx context.Context, pkg *PackageMetadata) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"INSERT INTO packages VALUES(:id, :name, :meta_primary, :meta_filelists, :meta_other) "+
 			"ON CONFLICT (name) DO UPDATE SET id = :id, meta_primary = :meta_primary, meta_filelists = :meta_filelists, meta_other = :meta_other",
 		pkg,
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -190,10 +87,10 @@ func (db *MetadataDB) AddPackage(ctx context.Context, pkg *PackageMetadata) erro
 }
 
 func (db *MetadataDB) CountPackages(ctx context.Context) (int, error) {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return 0, err
 	}
 
@@ -221,10 +118,10 @@ func (db *MetadataDB) WalkPackageMetadata(ctx context.Context, walkFn WalkPackag
 		return fmt.Errorf("no walk package function provided")
 	}
 
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
@@ -248,14 +145,14 @@ func (db *MetadataDB) WalkPackageMetadata(ctx context.Context, walkFn WalkPackag
 }
 
 func (db *MetadataDB) AddExtraMetadata(ctx context.Context, extraRepodata *ExtraMetadata) error {
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
-	db.mutex.Lock()
+	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		"INSERT INTO extra_metadata VALUES(:type, :filename, :checksum, :open_checksum, :size, :open_size, :timestamp, :data) "+
@@ -263,7 +160,7 @@ func (db *MetadataDB) AddExtraMetadata(ctx context.Context, extraRepodata *Extra
 			"open_size = :open_size, timestamp = :timestamp, data = :data",
 		extraRepodata,
 	)
-	db.mutex.Unlock()
+	db.Unlock()
 
 	if err != nil {
 		return err
@@ -286,10 +183,10 @@ func (db *MetadataDB) WalkExtraMetadata(ctx context.Context, walkFn WalkExtraMet
 		return fmt.Errorf("no walk extra repodata function provided")
 	}
 
-	db.reference.Add(1)
-	defer db.reference.Add(-1)
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
 
-	if err := db.open(ctx); err != nil {
+	if err := db.Open(ctx); err != nil {
 		return err
 	}
 
