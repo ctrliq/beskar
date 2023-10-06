@@ -73,7 +73,7 @@ var binaries = map[string]binaryConfig{
 	beskarctlBinary: {},
 	beskarYUMBinary: {
 		configFiles: map[string]string{
-			"internal/pkg/config/default/beskar-yum.yaml": "/etc/beskar/beskar-yum.yaml",
+			"internal/plugins/yum/pkg/config/default/beskar-yum.yaml": "/etc/beskar/beskar-yum.yaml",
 		},
 		execStmts: [][]string{
 			{
