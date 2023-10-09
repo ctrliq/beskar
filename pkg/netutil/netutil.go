@@ -67,7 +67,6 @@ func LocalOutboundIPs() ([]net.IP, error) {
 		if ok && (ipNet.IP.IsGlobalUnicast()) {
 			ips = append(ips, ipNet.IP)
 		}
-
 	}
 
 	return ips, nil

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5" //nolint:gosec
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -270,7 +271,7 @@ func initGossip(port string, gossipConfig gossip.Config) (_ *gossip.Member, _ *m
 }
 
 func getBeskarTransport(caPEM *mtls.CAPEM, beskarMeta *gossip.BeskarMeta) (http.RoundTripper, error) {
-	tlsConfig, err := mtls.GenerateClientConfig(
+	beskarTLSConfig, err := mtls.GenerateClientConfig(
 		bytes.NewReader(caPEM.Cert),
 		bytes.NewReader(caPEM.Key),
 		time.Now().AddDate(10, 0, 0),
@@ -279,11 +280,25 @@ func getBeskarTransport(caPEM *mtls.CAPEM, beskarMeta *gossip.BeskarMeta) (http.
 		return nil, fmt.Errorf("while generating beskar client mTLS configuration: %w", err)
 	}
 	//nolint:gosec
-	tlsConfig.ServerName = fmt.Sprintf("%x", md5.Sum([]byte(beskarMeta.Hostname)))
+	beskarTLSConfig.ServerName = fmt.Sprintf("%x", md5.Sum([]byte(beskarMeta.Hostname)))
+
+	beskarAddr := net.JoinHostPort(beskarMeta.Hostname, strconv.Itoa(int(beskarMeta.RegistryPort)))
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = tlsConfig
 	transport.MaxIdleConnsPerHost = 16
+	transport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		var tlsConfig *tls.Config
+
+		if addr == beskarAddr {
+			tlsConfig = beskarTLSConfig
+		}
+
+		conn, err := tls.Dial(network, addr, tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+		return conn, conn.HandshakeContext(ctx)
+	}
 
 	return transport, nil
 }
