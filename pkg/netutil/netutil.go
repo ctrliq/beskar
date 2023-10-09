@@ -47,7 +47,24 @@ func LocalIPs() ([]net.IP, error) {
 	}
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
-		if ok && (ipNet.IP.IsGlobalUnicast() || ipNet.IP.IsLoopback()) && ipNet.IP.To4() != nil {
+		if ok && (ipNet.IP.IsGlobalUnicast() || ipNet.IP.IsLoopback()) {
+			ips = append(ips, ipNet.IP)
+		}
+	}
+
+	return ips, nil
+}
+
+func LocalOutboundIPs() ([]net.IP, error) {
+	var ips []net.IP
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, fmt.Errorf("network interface lookup error: %w", err)
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if ok && (ipNet.IP.IsGlobalUnicast()) {
 			ips = append(ips, ipNet.IP)
 		}
 	}
