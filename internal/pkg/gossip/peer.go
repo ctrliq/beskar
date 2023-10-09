@@ -59,6 +59,15 @@ func Start(gossipConfig Config, meta *BeskarMeta, client kubernetes.Interface, t
 		return nil, err
 	} else if host == "" {
 		host = "0.0.0.0"
+	} else if host == "[::]" || host == "::" {
+		ips, err := netutil.LocalOutboundIPs()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(ips) > 0 {
+			host = ips[0].String()
+		}
 	}
 
 	return NewMember(
