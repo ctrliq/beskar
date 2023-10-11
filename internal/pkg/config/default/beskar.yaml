@@ -34,8 +34,8 @@ registry:
     #  v4auth: true
     #  chunksize: 5242880
     #  rootdirectory: /
-  delete:
-    enabled: true
+    delete:
+      enabled: true
   middleware:
     registry:
       - name: beskar

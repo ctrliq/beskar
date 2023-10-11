@@ -50,9 +50,13 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 		if errFn == nil {
 			return
 		}
-		h.logger.Error("process metadata manifest", "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest: %s", metadataPath, err)
-		// TODO: remove metadata
+		h.logger.Error("process metadata manifest", "metadata", metadataFilename, "error", errFn.Error())
+		h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest: %s", metadataFilename, errFn)
+
+		if err := h.DeleteManifest(ref); err != nil {
+			h.logger.Error("delete metadata manifest", "metadata", metadataFilename, "error", err.Error())
+			h.logDatabase(ctx, yumdb.LogError, "delete metadata %s manifest: %s", metadataFilename, err)
+		}
 	}()
 
 	if err := h.DownloadBlob(ref, metadataPath); err != nil {
@@ -92,10 +96,33 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 		extraMetadata.OpenChecksum = openedHashBuffer.Hex()
 	}
 
-	return h.addExtraMetadataDatabase(ctx, extraMetadata)
+	return h.addExtraMetadataToDatabase(ctx, extraMetadata)
 }
 
-func (h *Handler) deleteMetadataManifest(_ context.Context, _ *v1.Manifest) error {
-	// TODO: implement this
-	return fmt.Errorf("not supported yet")
+func (h *Handler) deleteMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest) (errFn error) {
+	dataType := ""
+
+	packageLayer, err := oras.GetLayerFilter(metadataManifest, func(mediatype types.MediaType) bool {
+		n, err := fmt.Sscanf(string(mediatype), orasrpm.RepomdDataLayerTypeFormat, &dataType)
+		if n == 0 || err != nil {
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		h.logger.Error("process metadata manifest layers", "error", err.Error())
+		return err
+	}
+
+	metadataFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
+
+	defer func() {
+		if errFn == nil {
+			return
+		}
+		h.logger.Error("process metadata manifest removal", "metadata", metadataFilename, "error", errFn.Error())
+		h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest removal: %s", metadataFilename, errFn)
+	}()
+
+	return h.removeExtraMetadataFromDatabase(ctx, dataType)
 }

@@ -138,3 +138,23 @@ func (rh *RepoHandler) DownloadBlob(ref string, destinationPath string) (errFn e
 	_, err = io.Copy(dst, rc)
 	return err
 }
+
+func (rh *RepoHandler) GetManifestDigest(ref string) (string, error) {
+	namedRef, err := name.ParseReference(ref, rh.Params.NameOptions...)
+	if err != nil {
+		return "", err
+	}
+	desc, err := remote.Head(namedRef, rh.Params.RemoteOptions...)
+	if err != nil {
+		return "", err
+	}
+	return desc.Digest.String(), nil
+}
+
+func (rh *RepoHandler) DeleteManifest(ref string) (errFn error) {
+	namedRef, err := name.ParseReference(ref, rh.Params.NameOptions...)
+	if err != nil {
+		return err
+	}
+	return remote.Delete(namedRef, rh.Params.RemoteOptions...)
+}

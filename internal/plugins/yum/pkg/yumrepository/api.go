@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/RussellLuo/kun/pkg/werror"
@@ -136,6 +137,8 @@ func (h *Handler) GetRepository(ctx context.Context) (properties *apiv1.Reposito
 	propertiesDB, err := db.GetProperties(ctx)
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
+	} else if !propertiesDB.Created {
+		return nil, werror.Wrap(gcode.ErrNotFound, errors.New("repository not found"))
 	}
 
 	properties = &apiv1.RepositoryProperties{
@@ -210,12 +213,39 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 	return logs, nil
 }
 
-func (h *Handler) RemoveRepositoryPackage(_ context.Context, _ string) (err error) {
+func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if h.getMirror() {
+		return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("could not delete package for mirror repository"))
 	}
 
-	return werror.Wrap(gcode.ErrNotImplemented, errors.New("package removal not supported yet"))
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	pkg, err := db.GetPackage(ctx, id)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	} else if pkg.Tag == "" {
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with ID %s not found", id))
+	}
+
+	tagRef := filepath.Join(h.Repository, "packages:"+pkg.Tag)
+
+	digest, err := h.GetManifestDigest(tagRef)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	digestRef := filepath.Join(h.Repository, "packages@"+digest)
+
+	if err := h.DeleteManifest(digestRef); err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return nil
 }
 
 func (h *Handler) GetRepositoryPackage(ctx context.Context, id string) (repositoryPackage *apiv1.RepositoryPackage, err error) {
