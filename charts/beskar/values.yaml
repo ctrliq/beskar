@@ -83,6 +83,8 @@ persistence:
 
 # set the type of filesystem to use: filesystem, s3
 storage: filesystem
+# to allow the deletion of image blobs and manifest by digest
+storageDeleteEnabled: false
 
 # Set this to name of secret for tls certs
 # tlsSecretName: registry.docker.example.com
@@ -180,8 +182,6 @@ configData:
         prometheus:
           enabled: false
           path: /metrics
-    delete:
-      enabled: true
     middleware:
       registry:
         - name: beskar

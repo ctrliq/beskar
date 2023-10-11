@@ -25,6 +25,23 @@ func (h *Handler) addPackageToMetadataDatabase(ctx context.Context, pkg *yumdb.P
 	return db.Sync(ctx)
 }
 
+func (h *Handler) removePackageFromMetadataDatabase(ctx context.Context, id string) error {
+	db, err := h.getMetadataDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer db.Close(false)
+
+	deleted, err := db.RemovePackage(ctx, id)
+	if err != nil {
+		return fmt.Errorf("while removing package metadata from database: %w", err)
+	} else if deleted {
+		return db.Sync(ctx)
+	}
+
+	return nil
+}
+
 func (h *Handler) addPackageToRepositoryDatabase(ctx context.Context, pkg *yumdb.RepositoryPackage) error {
 	db, err := h.getRepositoryDB(ctx)
 	if err != nil {
@@ -40,7 +57,24 @@ func (h *Handler) addPackageToRepositoryDatabase(ctx context.Context, pkg *yumdb
 	return db.Sync(ctx)
 }
 
-func (h *Handler) addExtraMetadataDatabase(ctx context.Context, extraMetadata *yumdb.ExtraMetadata) error {
+func (h *Handler) removePackageFromRepositoryDatabase(ctx context.Context, id string) error {
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer db.Close(false)
+
+	deleted, err := db.RemovePackage(ctx, id)
+	if err != nil {
+		return fmt.Errorf("while removing repository package from database: %w", err)
+	} else if deleted {
+		return db.Sync(ctx)
+	}
+
+	return nil
+}
+
+func (h *Handler) addExtraMetadataToDatabase(ctx context.Context, extraMetadata *yumdb.ExtraMetadata) error {
 	db, err := h.getMetadataDB(ctx)
 	if err != nil {
 		return err
@@ -53,6 +87,23 @@ func (h *Handler) addExtraMetadataDatabase(ctx context.Context, extraMetadata *y
 	}
 
 	return db.Sync(ctx)
+}
+
+func (h *Handler) removeExtraMetadataFromDatabase(ctx context.Context, dataType string) error {
+	db, err := h.getMetadataDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer db.Close(false)
+
+	deleted, err := db.RemoveExtraMetadata(ctx, dataType)
+	if err != nil {
+		return fmt.Errorf("while adding extra metadata to database: %w", err)
+	} else if deleted {
+		return db.Sync(ctx)
+	}
+
+	return nil
 }
 
 //nolint:unparam

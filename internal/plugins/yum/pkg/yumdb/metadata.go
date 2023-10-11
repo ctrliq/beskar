@@ -66,7 +66,8 @@ func (db *MetadataDB) AddPackage(ctx context.Context, pkg *PackageMetadata) erro
 	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
-		"INSERT INTO packages VALUES(:id, :name, :meta_primary, :meta_filelists, :meta_other) "+
+		// BE CAREFUL and respect the table's columns order !!
+		"INSERT INTO packages VALUES(:name, :id, :meta_primary, :meta_filelists, :meta_other) "+
 			"ON CONFLICT (name) DO UPDATE SET id = :id, meta_primary = :meta_primary, meta_filelists = :meta_filelists, meta_other = :meta_other",
 		pkg,
 	)
@@ -84,6 +85,30 @@ func (db *MetadataDB) AddPackage(ctx context.Context, pkg *PackageMetadata) erro
 	}
 
 	return nil
+}
+
+func (db *MetadataDB) RemovePackage(ctx context.Context, id string) (bool, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return false, err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(ctx, "DELETE FROM packages WHERE id = ?", id)
+	db.Unlock()
+
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected == 1, nil
 }
 
 func (db *MetadataDB) CountPackages(ctx context.Context) (int, error) {
@@ -174,6 +199,30 @@ func (db *MetadataDB) AddExtraMetadata(ctx context.Context, extraRepodata *Extra
 	}
 
 	return nil
+}
+
+func (db *MetadataDB) RemoveExtraMetadata(ctx context.Context, dataType string) (bool, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return false, err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(ctx, "DELETE FROM extra_metadata WHERE type = ?", dataType)
+	db.Unlock()
+
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected == 1, nil
 }
 
 type WalkExtraMetadataFunc func(*ExtraMetadata) error

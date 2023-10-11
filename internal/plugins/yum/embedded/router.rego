@@ -1,6 +1,7 @@
 package router
 
 import future.keywords.if
+import future.keywords.in
 
 default output = {"repository": "", "redirect_url": "", "found": false}
 
@@ -36,6 +37,7 @@ blob_url(repo, filename, blobtype) = url if {
 output = obj {
     some index
     data.routes[index].blobtype != ""
+    input.method in data.routes[index].methods
     match := regex.find_all_string_submatch_n(
         data.routes[index].pattern,
         input.path,

@@ -42,8 +42,12 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 			return
 		}
 		h.logger.Error("process package manifest", "package", packageName, "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process package %s manifest: %s", packageName, err)
-		// TODO: remove package
+		h.logDatabase(ctx, yumdb.LogError, "process package %s manifest: %s", packageName, errFn)
+
+		if err := h.DeleteManifest(ref); err != nil {
+			h.logger.Error("delete package manifest", "package", packageName, "error", err.Error())
+			h.logDatabase(ctx, yumdb.LogError, "delete package %s manifest: %s", packageName, err)
+		}
 	}()
 
 	if err := h.DownloadBlob(ref, packagePath); err != nil {
@@ -64,7 +68,7 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 
 		err = h.addPackageToMetadataDatabase(ctx, packageMetadata)
 		if err != nil {
-			return fmt.Errorf("while adding package %s to database: %w", packageName, err)
+			return fmt.Errorf("while adding package %s to metadata database: %w", packageName, err)
 		}
 	}
 
@@ -141,9 +145,35 @@ func (h *Handler) generateAndPushMetadata(ctx context.Context) (errFn error) {
 	return repomd.push(h.Params, extraMetadatas)
 }
 
-func (h *Handler) deletePackageManifest(_ context.Context, _ *v1.Manifest) error {
-	// TODO: implement this
-	return fmt.Errorf("not supported yet")
+func (h *Handler) deletePackageManifest(ctx context.Context, packageManifest *v1.Manifest) (errFn error) {
+	packageLayer, err := oras.GetLayer(packageManifest, orasrpm.RPMPackageLayerType)
+	if err != nil {
+		return err
+	}
+	packageName := packageLayer.Annotations[imagespec.AnnotationTitle]
+	packageID := packageLayer.Digest.Hex
+
+	defer func() {
+		if errFn == nil {
+			return
+		}
+		h.logger.Error("process package manifest removal", "package", packageName, "error", errFn.Error())
+		h.logDatabase(ctx, yumdb.LogError, "process package %s manifest removal: %s", packageName, errFn)
+	}()
+
+	if !h.getMirror() {
+		err = h.removePackageFromMetadataDatabase(ctx, packageID)
+		if err != nil {
+			return fmt.Errorf("while removing package %s from metadata database: %w", packageName, err)
+		}
+	}
+
+	err = h.removePackageFromRepositoryDatabase(ctx, packageID)
+	if err != nil {
+		return fmt.Errorf("while removing package %s from repository database: %w", packageName, err)
+	}
+
+	return nil
 }
 
 func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*yumdb.RepositoryPackage, error) {
@@ -171,6 +201,10 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 	if err != nil {
 		return nil, err
 	}
+	arch := pkg.Architecture()
+	if pkg.SourceRPM() == "" {
+		arch = "src"
+	}
 
 	return &yumdb.RepositoryPackage{
 		ID:           packageID,
@@ -178,7 +212,7 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 		UploadTime:   time.Now().UTC().Unix(),
 		BuildTime:    pkg.BuildTime().Unix(),
 		Size:         pkg.Size(),
-		Architecture: pkg.Architecture(),
+		Architecture: arch,
 		SourceRPM:    pkg.SourceRPM(),
 		Version:      pkg.Version(),
 		Release:      pkg.Release(),

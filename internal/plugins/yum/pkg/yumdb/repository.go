@@ -77,6 +77,7 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
+		// BE CAREFUL and respect the table's columns order !!
 		"INSERT INTO packages VALUES(:tag, :id, :name, :upload_time, :build_time, :size, :architecture, :source_rpm, "+
 			":version, :release, :groups, :license, :vendor, :summary, :description, :verified, :gpg_signature) "+
 			"ON CONFLICT (tag) DO UPDATE SET id = :id, name = :name, upload_time = :upload_time, build_time = :build_time, "+
@@ -101,6 +102,30 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 	return nil
 }
 
+func (db *RepositoryDB) RemovePackage(ctx context.Context, id string) (bool, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return false, err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(ctx, "DELETE FROM packages WHERE id = ?", id)
+	db.Unlock()
+
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected == 1, nil
+}
+
 func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryPackage, error) {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
@@ -118,7 +143,7 @@ func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryP
 	pkg := new(RepositoryPackage)
 
 	for rows.Next() {
-		if err := rows.Scan(pkg); err != nil {
+		if err := rows.StructScan(pkg); err != nil {
 			return nil, err
 		}
 	}

@@ -2,11 +2,19 @@
     "routes": [
         {
             "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/repodata/([^/]+)$",
-            "blobtype": "repodata"
+            "blobtype": "repodata",
+            "methods": [
+                "GET",
+                "HEAD"
+            ]
         },
         {
             "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/.*?([^/]+\\.[s]?rpm)$",
-            "blobtype": "packages"
+            "blobtype": "packages",
+            "methods": [
+                "GET",
+                "HEAD"
+            ]
         },
         {
             "pattern": "/artifacts/yum/api/v1/doc/(.*)",

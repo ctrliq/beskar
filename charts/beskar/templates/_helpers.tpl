@@ -200,7 +200,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       key: proxyPassword
 {{- end -}}
 
-{{- if .Values.persistence.deleteEnabled }}
+{{- if .Values.storageDeleteEnabled }}
 - name: BESKAR_REGISTRY_STORAGE_DELETE_ENABLED
   value: "true"
 {{- end -}}

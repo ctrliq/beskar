@@ -91,7 +91,10 @@ func (rr *RegoRouter) Decision(req *http.Request, registry distribution.Namespac
 	}
 	ctx := context.WithValue(req.Context(), &funcContextKey, fctx)
 
-	rs, err := rr.peq.Eval(ctx, rego.EvalInput(map[string]string{"path": req.URL.Path}))
+	rs, err := rr.peq.Eval(ctx, rego.EvalInput(map[string]string{
+		"path":   req.URL.Path,
+		"method": req.Method,
+	}))
 	if err != nil {
 		if errors.Is(err, &errCancelled) && fctx.builtinErr != nil {
 			return nil, fctx.builtinErr
