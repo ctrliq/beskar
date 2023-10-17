@@ -1,0 +1,130 @@
+# Default values for beskar-static.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/ctrliq/beskar-static
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: 0.0.1
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  # sessionAffinity: None
+  # sessionAffinityConfig: {}
+  type: ClusterIP
+  port: 5200
+  annotations: {}
+
+gossip:
+  # sessionAffinity: None
+  # sessionAffinityConfig: {}
+  port: 5201
+  annotations: {}
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+extraVolumeMounts: []
+
+extraVolumes: []
+
+extraEnvVars: []
+
+persistence:
+  accessMode: 'ReadWriteOnce'
+  enabled: false
+  size: 10Gi
+  # storageClass: '-'
+
+secrets:
+  registry:
+    username: beskar
+    password: beskar
+
+  s3:
+    accessKey: ""
+    secretKey: ""
+
+  gcs:
+    keyfile: ""
+
+  azure:
+    accountName: ""
+    # base64_encoded_account_key
+    accountKey: ""
+
+configData:
+  version: "1.0"
+  addr: :5200
+  profiling: false
+  datadir: /tmp/beskar-static
+
+  log:
+    level: debug
+    format: json
+
+  gossip:
+    addr: :5201
+
+  storage:
+    driver: filesystem
+    prefix: ""
+    s3:
+      endpoint: 127.0.0.1:9100
+      bucket: beskar-static
+      region: us-east-1
+    filesystem:
+      directory: /tmp/beskar-static
+    gcs:
+      bucket: beskar-static
+    azure:
+      container: beskar-static

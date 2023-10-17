@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -364,30 +365,41 @@ func getReverseProxyHostport(ctx context.Context) (string, bool) {
 	return v, ok
 }
 
-func initPlugins(ctx context.Context) error {
+func loadPlugins(ctx context.Context) (func(), error) {
+	pluginList := strings.Split(os.Getenv("BESKAR_PLUGINS"), " ")
+
 	self, err := os.Executable()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	execPath := filepath.Dir(self)
 
-	executable := filepath.Join(execPath, "beskar-yum")
+	wg := sync.WaitGroup{}
 
-	if _, err := os.Stat(executable); err == nil {
-		cmd := exec.CommandContext(ctx, executable, os.Args[1:]...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Cancel = func() error {
-			return cmd.Process.Signal(syscall.SIGTERM)
+	for _, plugin := range pluginList {
+		if plugin == "" {
+			continue
 		}
-		cmd.WaitDelay = 5 * time.Second
-		if err := cmd.Start(); err != nil {
-			return err
+		executable := filepath.Join(execPath, plugin)
+
+		if _, err := os.Stat(executable); err == nil {
+			cmd := exec.CommandContext(ctx, executable, os.Args[1:]...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Cancel = func() error {
+				return cmd.Process.Signal(syscall.SIGTERM)
+			}
+			cmd.WaitDelay = 5 * time.Second
+			if err := cmd.Start(); err != nil {
+				return nil, err
+			}
+			wg.Add(1)
+			go func() {
+				_ = cmd.Wait()
+				wg.Done()
+			}()
 		}
-		go func() {
-			_ = cmd.Wait()
-		}()
 	}
 
-	return nil
+	return wg.Wait, nil
 }

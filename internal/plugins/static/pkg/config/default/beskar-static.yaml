@@ -1,0 +1,37 @@
+version: 1.0
+
+addr: 0.0.0.0:5200
+
+log:
+  level: debug
+  format: json
+
+profiling: true
+datadir: /tmp/beskar-static
+
+gossip:
+  addr: 0.0.0.0:5201
+  key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
+  peers:
+    - 127.0.0.1:5102
+
+storage:
+  driver: filesystem
+  prefix: ""
+  s3:
+    endpoint: 127.0.0.1:9100
+    bucket: beskar-static
+    access-key-id: minioadmin
+    secret-access-key: minioadmin
+    session-token:
+    region: us-east-1
+    disable-ssl: true
+  filesystem:
+    directory: /tmp/beskar-static
+  gcs:
+    bucket: beskar-static
+    keyfile: /path/to/keyfile
+  azure:
+    container: beskar-static
+    account-name: account_name
+    account-key: base64_encoded_account_key

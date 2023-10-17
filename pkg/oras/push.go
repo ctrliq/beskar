@@ -54,3 +54,40 @@ func Push(pusher Pusher, options ...remote.Option) error {
 
 	return fmt.Errorf("no image nor image index to push to %s", ref.Name())
 }
+
+// NewGenericPusher returns a pusher to push a manifest and a blob to a registry.
+func NewGenericPusher(ref name.Reference, manifestConfig ManifestConfig, layer Layer) Pusher {
+	return &genericPusher{
+		ref:            ref,
+		manifestConfig: manifestConfig,
+		layer:          layer,
+	}
+}
+
+type genericPusher struct {
+	ref            name.Reference
+	manifestConfig ManifestConfig
+	layer          Layer
+}
+
+func (gp *genericPusher) Reference() name.Reference {
+	return gp.ref
+}
+
+func (gp *genericPusher) ImageIndex() (v1.ImageIndex, error) {
+	return nil, ErrNoImageIndexToPush
+}
+
+func (gp *genericPusher) Image() (v1.Image, error) {
+	img := NewImage()
+
+	if err := img.AddConfig(gp.manifestConfig.MediaType(), gp.manifestConfig.RawConfig()); err != nil {
+		return nil, fmt.Errorf("while adding manifest config: %w", err)
+	}
+
+	if err := img.AddLayer(gp.layer); err != nil {
+		return nil, fmt.Errorf("while adding layer: %w", err)
+	}
+
+	return img, nil
+}

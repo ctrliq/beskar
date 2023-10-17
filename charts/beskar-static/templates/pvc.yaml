@@ -1,0 +1,26 @@
+{{- if .Values.persistence.enabled }}
+{{- if not .Values.persistence.existingClaim -}}
+{{- if eq .Values.configData.storage.driver "filesystem" }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ template "beskar-static.fullname" . }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar-static.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size | quote }}
+{{- if .Values.persistence.storageClass }}
+{{- if (eq "-" .Values.persistence.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.persistence.storageClass }}"
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}

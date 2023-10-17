@@ -105,10 +105,6 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	beskarRegistry.server = server
 	beskarRegistry.logger = dcontext.GetLogger(ctx)
 
-	if err := initPlugins(ctx); err != nil {
-		return nil, nil, err
-	}
-
 	if beskarConfig.Profiling {
 		beskarRegistry.setProfiling()
 	}
@@ -429,9 +425,16 @@ func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 		return err
 	}
 
+	waitPlugins, err := loadPlugins(ctx)
+	if err != nil {
+		return err
+	}
+
 	err = br.wait(true)
 
 	br.logger.Info("Stopping beskar server")
+
+	waitPlugins()
 
 	if err == nil && br.beskarConfig.Registry.HTTP.DrainTimeout > 0 {
 		c, cancel := context.WithTimeout(context.Background(), br.beskarConfig.Registry.HTTP.DrainTimeout)

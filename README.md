@@ -7,6 +7,7 @@ It's designed to support various artifacts and expose them through dedicated plu
 
 * Modular/Extensible via plugins
 * Support for YUM repositories (beskar-yum)
+* Support for static file repositories (beskar-static)
 
 ### Docker images
 
@@ -14,6 +15,7 @@ Docker images are available for various architecture via Github packages reposit
 
 * [beskar](https://github.com/ctrliq/beskar/pkgs/container/beskar)
 * [beskar-yum](https://github.com/ctrliq/beskar/pkgs/container/beskar-yum)
+* [beskar-static](https://github.com/ctrliq/beskar/pkgs/container/beskar-static)
 
 ### Helm charts
 
@@ -31,6 +33,12 @@ For beskar-yum helm chart:
 
 ```
 helm pull oci://ghcr.io/ctrliq/helm-charts/beskar-yum --version 0.0.1 --untar
+```
+
+For beskar-static helm chart:
+
+```
+helm pull oci://ghcr.io/ctrliq/helm-charts/beskar-static --version 0.0.1 --untar
 ```
 
 ### Compilation

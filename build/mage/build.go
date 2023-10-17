@@ -57,9 +57,10 @@ type binaryConfig struct {
 }
 
 const (
-	beskarBinary    = "beskar"
-	beskarctlBinary = "beskarctl"
-	beskarYUMBinary = "beskar-yum"
+	beskarBinary       = "beskar"
+	beskarctlBinary    = "beskarctl"
+	beskarYUMBinary    = "beskar-yum"
+	beskarStaticBinary = "beskar-static"
 )
 
 var binaries = map[string]binaryConfig{
@@ -89,6 +90,18 @@ var binaries = map[string]binaryConfig{
 		},
 		useProto:  true,
 		baseImage: "debian:bullseye-slim",
+	},
+	beskarStaticBinary: {
+		configFiles: map[string]string{
+			"internal/plugins/static/pkg/config/default/beskar-static.yaml": "/etc/beskar/beskar-static.yaml",
+		},
+		genAPI: &genAPI{
+			path:          "pkg/plugins/static/api/v1",
+			filename:      "api.go",
+			interfaceName: "Static",
+		},
+		useProto:  true,
+		baseImage: "alpine:3.17",
 	},
 }
 
@@ -129,6 +142,7 @@ func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
 		mg.F(b.Plugin, beskarYUMBinary),
+		mg.F(b.Plugin, beskarStaticBinary),
 	)
 }
 
