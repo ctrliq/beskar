@@ -37,3 +37,33 @@ func GetManifest(ref name.Reference, options ...remote.Option) (*v1.Manifest, er
 	manifest := new(v1.Manifest)
 	return manifest, json.Unmarshal(desc.Manifest, manifest)
 }
+
+// ManifestConfig defines the interface for manifest configs.
+type ManifestConfig interface {
+	RawConfig() []byte
+	MediaType() types.MediaType
+}
+
+// manifestConfig represents a generic manifest config.
+type manifestConfig struct {
+	mediaType types.MediaType
+	rawConfig []byte
+}
+
+// NewManifestConfig returns a ManifestConfig to push.
+func NewManifestConfig(mediaType string, rawConfig []byte) ManifestConfig {
+	return &manifestConfig{
+		mediaType: types.MediaType(mediaType),
+		rawConfig: rawConfig,
+	}
+}
+
+// RawConfig returns the raw bytes manifest config.
+func (mc *manifestConfig) RawConfig() []byte {
+	return mc.rawConfig
+}
+
+// MediaType returns the mediatype for the manifest config.
+func (mc *manifestConfig) MediaType() types.MediaType {
+	return mc.mediaType
+}

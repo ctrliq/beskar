@@ -38,7 +38,7 @@ type RPMMetadata interface {
 	Annotations() map[string]string
 }
 
-var _ oras.Pusher = &RPMPusher{}
+var _ oras.Pusher = &RPMMetadataPusher{}
 
 func NewRPMMetadataPusher(ref name.Reference, configMediatype types.MediaType, layers ...oras.Layer) *RPMMetadataPusher {
 	return &RPMMetadataPusher{
