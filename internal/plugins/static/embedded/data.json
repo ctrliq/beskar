@@ -1,7 +1,7 @@
 {
     "routes": [
         {
-            "pattern": "/(artifacts/static/[0-9A-Za-z-_/]{1,})/file/([^/]+)$",
+            "pattern": "/(artifacts/static/[0-9A-Za-z-_./]{1,})/file/([^/]+)$",
             "methods": [
                 "GET",
                 "HEAD"

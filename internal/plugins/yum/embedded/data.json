@@ -1,7 +1,7 @@
 {
     "routes": [
         {
-            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/repodata/([^/]+)$",
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_./]{1,})/repo/repodata/([^/]+)$",
             "blobtype": "repodata",
             "methods": [
                 "GET",
@@ -9,7 +9,7 @@
             ]
         },
         {
-            "pattern": "/(artifacts/yum/[0-9A-Za-z-_/]{1,})/repo/.*?([^/]+\\.[s]?rpm)$",
+            "pattern": "/(artifacts/yum/[0-9A-Za-z-_./]{1,})/repo/.*?([^/]+\\.[s]?rpm)$",
             "blobtype": "packages",
             "methods": [
                 "GET",
