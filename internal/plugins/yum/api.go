@@ -5,7 +5,6 @@ package yum
 
 import (
 	"context"
-	"strings"
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
@@ -13,8 +12,8 @@ import (
 )
 
 func checkRepository(repository string) error {
-	if !strings.HasPrefix(repository, "artifacts/yum/") {
-		return werror.Wrapf(gcode.ErrInvalidArgument, "invalid repository name, must start with artifacts/yum/ prefix")
+	if !apiv1.RepositoryMatch(repository) {
+		return werror.Wrapf(gcode.ErrInvalidArgument, "invalid repository name, must match expression %q", apiv1.RepositoryRegex)
 	}
 	return nil
 }

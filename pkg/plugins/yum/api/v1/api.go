@@ -5,7 +5,16 @@ package apiv1
 
 import (
 	"context"
+	"regexp"
 )
+
+const RepositoryRegex = "^(artifacts/yum/[a-z0-9]+(?:[/._-][a-z0-9]+)*)$"
+
+var repositoryMatcher = regexp.MustCompile(RepositoryRegex)
+
+func RepositoryMatch(repository string) bool {
+	return repositoryMatcher.MatchString(repository)
+}
 
 type Page struct {
 	Size  int

@@ -1,18 +1,18 @@
 {
     "routes": [
         {
-            "pattern": "/(artifacts/static/[0-9A-Za-z-_./]{1,})/file/([^/]+)$",
+            "pattern": "^/(artifacts/static/[a-z0-9]+(?:[/._-][a-z0-9]+)*)/file/([^/]+)$",
             "methods": [
                 "GET",
                 "HEAD"
             ]
         },
         {
-            "pattern": "/artifacts/static/api/v1/doc/(.*)",
+            "pattern": "^/artifacts/static/api/v1/doc/(.*)$",
             "body": false
         },
         {
-            "pattern": "/artifacts/static/api/v1/(.*)",
+            "pattern": "^/artifacts/static/api/v1/(.*)$",
             "body": true,
             "body_key": "repository"
         }

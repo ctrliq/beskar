@@ -16,7 +16,6 @@ import (
 	"github.com/cavaliergopher/rpm"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
-	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yummeta"
 	"go.ciq.dev/beskar/pkg/oras"
@@ -24,7 +23,7 @@ import (
 	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 )
 
-func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v1.Manifest, sem *mirror.Semaphore) (errFn error) {
+func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v1.Manifest) (errFn error) {
 	packageLayer, err := oras.GetLayer(packageManifest, orasrpm.RPMPackageLayerType)
 	if err != nil {
 		return err
@@ -35,9 +34,8 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 	packagePath := filepath.Join(h.downloadDir(), packageName)
 
 	defer func() {
-		if h.syncing.Load() {
-			sem.Release(1)
-		}
+		h.syncSemRelease(1, false)
+
 		if errFn == nil {
 			return
 		}
