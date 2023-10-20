@@ -21,15 +21,19 @@ import (
 
 const syncMaxDownloads = 10
 
-func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (errFn error) {
+func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 	reposync := h.updateSyncing(true)
 
 	defer func() {
-		if err := sem.Acquire(ctx, syncMaxDownloads, time.Minute); err == nil {
-			sem.Release(syncMaxDownloads)
+		if err := h.syncSemAcquire(ctx, syncMaxDownloads, 5*time.Minute); err == nil {
+			reposync = h.updateSyncing(false)
+			h.syncSemRelease(syncMaxDownloads, true)
+		} else {
+			reposync = h.updateSyncing(false)
+			h.syncSemReset()
+			h.logger.Warn("sync semaphore resetted after timeout")
 		}
 
-		reposync = h.updateSyncing(false)
 		if errFn != nil {
 			reposync.SyncError = errFn.Error()
 		} else {
@@ -68,7 +72,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 	})
 
 	for path := range paths {
-		if err := sem.Acquire(ctx, 1, time.Minute); err != nil {
+		if err := h.syncSemAcquire(ctx, 1, time.Minute); err != nil {
 			return err
 		}
 
@@ -77,6 +81,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 			if err != nil {
 				h.logger.Error("package download", "package", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "package %s retrieval: %s", path, err)
+				h.syncSemRelease(1, false)
 				return
 			}
 			defer rc.Close()
@@ -86,6 +91,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				_ = os.Remove(fullPath)
 				h.logger.Error("package copy", "package", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "package %s copy: %s", path, err)
+				h.syncSemRelease(1, false)
 				return
 			}
 
@@ -94,6 +100,7 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				_ = os.Remove(fullPath)
 				h.logger.Error("package push prepare", "package", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "package %s push initialization: %s", path, err)
+				h.syncSemRelease(1, false)
 				return
 			}
 
@@ -101,6 +108,9 @@ func (h *Handler) repositorySync(ctx context.Context, sem *mirror.Semaphore) (er
 				_ = os.Remove(fullPath)
 				h.logger.Error("package push", "package", path, "error", err.Error())
 				h.logDatabase(dbCtx, yumdb.LogError, "package %s push: %s", path, err)
+				if _, _, err := oras.HeadManifest(pusher.Reference(), h.Params.RemoteOptions...); err != nil {
+					h.syncSemRelease(1, false)
+				}
 				return
 			}
 

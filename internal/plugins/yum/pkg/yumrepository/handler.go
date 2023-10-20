@@ -19,12 +19,12 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"go.ciq.dev/beskar/internal/pkg/repository"
-	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"go.ciq.dev/beskar/pkg/orasrpm"
 	"golang.org/x/crypto/openpgp"       //nolint:staticcheck
 	"golang.org/x/crypto/openpgp/armor" //nolint:staticcheck
+	"golang.org/x/sync/semaphore"
 )
 
 type Handler struct {
@@ -40,9 +40,11 @@ type Handler struct {
 	statusDB     *yumdb.StatusDB
 	logDB        *yumdb.LogDB
 
-	syncCh   chan struct{}
-	reposync atomic.Pointer[yumdb.Reposync]
-	syncing  atomic.Bool
+	syncCh       chan struct{}
+	reposync     atomic.Pointer[yumdb.Reposync]
+	syncing      atomic.Bool
+	syncSemMutex sync.RWMutex
+	syncSem      *semaphore.Weighted
 
 	propertyMutex sync.RWMutex
 	mirror        bool
@@ -56,6 +58,7 @@ func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handl
 		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
 		logger:      logger,
 		syncCh:      make(chan struct{}, 1),
+		syncSem:     semaphore.NewWeighted(syncMaxDownloads),
 	}
 }
 
@@ -310,6 +313,40 @@ func (h *Handler) updateSyncing(syncing bool) *yumdb.Reposync {
 	return &reposync
 }
 
+func (h *Handler) syncSemAcquire(ctx context.Context, n int64, timeout time.Duration) error {
+	if !h.syncing.Load() {
+		return fmt.Errorf("semaphore acquire called outside of the repository sync context")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	h.syncSemMutex.RLock()
+	sem := h.syncSem
+	h.syncSemMutex.RUnlock()
+
+	return sem.Acquire(ctx, n)
+}
+
+func (h *Handler) syncSemRelease(n int64, force bool) {
+	if h.syncing.Load() || force {
+		defer func() {
+			if recover() != nil {
+				h.logger.Warn("sync semaphore release recovery")
+			}
+		}()
+		h.syncSemMutex.RLock()
+		h.syncSem.Release(n)
+		h.syncSemMutex.RUnlock()
+	}
+}
+
+func (h *Handler) syncSemReset() {
+	h.syncSemMutex.Lock()
+	h.syncSem = semaphore.NewWeighted(syncMaxDownloads)
+	h.syncSemMutex.Unlock()
+}
+
 func (h *Handler) Start(ctx context.Context) {
 	if err := os.MkdirAll(h.downloadDir(), 0o700); err != nil {
 		h.cleanup()
@@ -371,8 +408,6 @@ func (h *Handler) Start(ctx context.Context) {
 		return
 	}
 
-	sem := mirror.NewWeighted(syncMaxDownloads)
-
 	go func() {
 		for !h.Stopped.Load() {
 			select {
@@ -380,7 +415,7 @@ func (h *Handler) Start(ctx context.Context) {
 				h.Stopped.Store(true)
 			case <-h.syncCh:
 				go func() {
-					err := h.repositorySync(ctx, sem)
+					err := h.repositorySync(ctx)
 					if err != nil {
 						h.logger.Error("reposistory sync", "error", err.Error())
 					}
@@ -388,7 +423,7 @@ func (h *Handler) Start(ctx context.Context) {
 			case <-h.Queued:
 				events := h.DequeueEvents()
 
-				h.processEvents(events, sem)
+				h.processEvents(events)
 
 				// all remaining events in database have been processed
 				// start the repository sync
@@ -406,7 +441,7 @@ func (h *Handler) Start(ctx context.Context) {
 	}()
 }
 
-func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Semaphore) {
+func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 	processContext := context.Background()
 
 	for _, event := range events {
@@ -419,12 +454,12 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload, sem *mirror.Sema
 		if event.Action == eventv1.Action_ACTION_PUT {
 			switch manifest.Config.MediaType {
 			case types.MediaType(orasrpm.RPMConfigType):
-				err := h.processPackageManifest(processContext, manifest, sem)
+				err := h.processPackageManifest(processContext, manifest)
 				if err != nil {
 					h.logger.Error("process package manifest", "error", err.Error())
 				}
 			case types.MediaType(orasrpm.RepomdDataConfigType):
-				err := h.processMetadataManifest(processContext, manifest, sem)
+				err := h.processMetadataManifest(processContext, manifest)
 				if err != nil {
 					h.logger.Error("process metadata manifest", "error", err.Error())
 				}
