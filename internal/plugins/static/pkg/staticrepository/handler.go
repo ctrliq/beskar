@@ -209,7 +209,7 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 			}
 		}
 
-		if err := h.statusDB.RemoveEvent(processContext, event.Digest); err != nil {
+		if err := h.statusDB.RemoveEvent(processContext, event); err != nil {
 			h.logger.Error("event remove", "error", err.Error())
 		} else if err := h.statusDB.Sync(processContext); err != nil {
 			h.logger.Error("event remove", "error", err.Error())

@@ -24,7 +24,6 @@ import (
 	"go.ciq.dev/beskar/pkg/orasrpm"
 	"golang.org/x/crypto/openpgp"       //nolint:staticcheck
 	"golang.org/x/crypto/openpgp/armor" //nolint:staticcheck
-	"golang.org/x/sync/semaphore"
 )
 
 type Handler struct {
@@ -40,11 +39,12 @@ type Handler struct {
 	statusDB     *yumdb.StatusDB
 	logDB        *yumdb.LogDB
 
-	syncCh       chan struct{}
-	reposync     atomic.Pointer[yumdb.Reposync]
-	syncing      atomic.Bool
-	syncSemMutex sync.RWMutex
-	syncSem      *semaphore.Weighted
+	syncCh   chan struct{}
+	reposync atomic.Pointer[yumdb.Reposync]
+	syncing  atomic.Bool
+
+	syncArtifactsMutex sync.RWMutex
+	syncArtifacts      map[string]chan error
 
 	propertyMutex sync.RWMutex
 	mirror        bool
@@ -54,11 +54,11 @@ type Handler struct {
 
 func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handler {
 	return &Handler{
-		RepoHandler: repoHandler,
-		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
-		logger:      logger,
-		syncCh:      make(chan struct{}, 1),
-		syncSem:     semaphore.NewWeighted(syncMaxDownloads),
+		RepoHandler:   repoHandler,
+		repoDir:       filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
+		logger:        logger,
+		syncCh:        make(chan struct{}, 1),
+		syncArtifacts: make(map[string]chan error),
 	}
 }
 
@@ -69,8 +69,8 @@ func (h *Handler) downloadDir() string {
 func (h *Handler) QueueEvent(event *eventv1.EventPayload, store bool) error {
 	ctx := context.Background()
 
-	if h.getMirror() && !h.getReposync().Syncing {
-		return fmt.Errorf("manual upload not supported for repository configured as mirror")
+	if h.getMirror() && event.Origin != eventv1.Origin_ORIGIN_PLUGIN {
+		return fmt.Errorf("operation not supported for repository configured as mirror")
 	}
 
 	if store {
@@ -310,41 +310,7 @@ func (h *Handler) updateSyncing(syncing bool) *yumdb.Reposync {
 		reposync.EndTime = time.Now().UTC().Unix()
 	}
 	h.reposync.Store(&reposync)
-	return &reposync
-}
-
-func (h *Handler) syncSemAcquire(ctx context.Context, n int64, timeout time.Duration) error {
-	if !h.syncing.Load() {
-		return fmt.Errorf("semaphore acquire called outside of the repository sync context")
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	h.syncSemMutex.RLock()
-	sem := h.syncSem
-	h.syncSemMutex.RUnlock()
-
-	return sem.Acquire(ctx, n)
-}
-
-func (h *Handler) syncSemRelease(n int64, force bool) {
-	if h.syncing.Load() || force {
-		defer func() {
-			if recover() != nil {
-				h.logger.Warn("sync semaphore release recovery")
-			}
-		}()
-		h.syncSemMutex.RLock()
-		h.syncSem.Release(n)
-		h.syncSemMutex.RUnlock()
-	}
-}
-
-func (h *Handler) syncSemReset() {
-	h.syncSemMutex.Lock()
-	h.syncSem = semaphore.NewWeighted(syncMaxDownloads)
-	h.syncSemMutex.Unlock()
+	return h.reposync.Load()
 }
 
 func (h *Handler) Start(ctx context.Context) {
@@ -454,12 +420,12 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 		if event.Action == eventv1.Action_ACTION_PUT {
 			switch manifest.Config.MediaType {
 			case types.MediaType(orasrpm.RPMConfigType):
-				err := h.processPackageManifest(processContext, manifest)
+				err := h.processPackageManifest(processContext, manifest, event.Digest)
 				if err != nil {
 					h.logger.Error("process package manifest", "error", err.Error())
 				}
 			case types.MediaType(orasrpm.RepomdDataConfigType):
-				err := h.processMetadataManifest(processContext, manifest)
+				err := h.processMetadataManifest(processContext, manifest, event.Digest)
 				if err != nil {
 					h.logger.Error("process metadata manifest", "error", err.Error())
 				}
@@ -479,7 +445,7 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 			}
 		}
 
-		if err := h.statusDB.RemoveEvent(processContext, event.Digest); err != nil {
+		if err := h.statusDB.RemoveEvent(processContext, event); err != nil {
 			h.logger.Error("event remove", "error", err.Error())
 		} else if err := h.statusDB.Sync(processContext); err != nil {
 			h.logger.Error("event remove", "error", err.Error())

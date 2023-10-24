@@ -62,7 +62,7 @@ func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) e
 		ctx,
 		"INSERT INTO events VALUES(:id, :payload) ON CONFLICT (id) DO UPDATE SET payload = :payload",
 		&Event{
-			ID:      event.Digest,
+			ID:      fmt.Sprintf("%s:%s", event.Digest, event.Action),
 			Payload: payload,
 		},
 	)
@@ -82,13 +82,15 @@ func (db *StatusDB) AddEvent(ctx context.Context, event *eventv1.EventPayload) e
 	return nil
 }
 
-func (db *StatusDB) RemoveEvent(ctx context.Context, id string) error {
+func (db *StatusDB) RemoveEvent(ctx context.Context, event *eventv1.EventPayload) error {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
 
 	if err := db.Open(ctx); err != nil {
 		return err
 	}
+
+	id := fmt.Sprintf("%s:%s", event.Digest, event.Action)
 
 	db.Lock()
 	result, err := db.NamedExecContext(

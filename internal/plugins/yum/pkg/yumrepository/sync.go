@@ -5,6 +5,8 @@ package yumrepository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,11 +14,13 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/hashicorp/go-multierror"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasrpm"
+	"golang.org/x/sync/semaphore"
 )
 
 const syncMaxDownloads = 10
@@ -25,14 +29,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 	reposync := h.updateSyncing(true)
 
 	defer func() {
-		if err := h.syncSemAcquire(ctx, syncMaxDownloads, 5*time.Minute); err == nil {
-			reposync = h.updateSyncing(false)
-			h.syncSemRelease(syncMaxDownloads, true)
-		} else {
-			reposync = h.updateSyncing(false)
-			h.syncSemReset()
-			h.logger.Warn("sync semaphore resetted after timeout")
-		}
+		reposync = h.updateSyncing(false)
 
 		if errFn != nil {
 			reposync.SyncError = errFn.Error()
@@ -42,13 +39,31 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 		if err := h.updateReposyncDatabase(dbCtx, reposync); err != nil {
 			if errFn == nil {
 				errFn = err
+			} else {
+				h.logger.Error("reposync database update failed", "error", err.Error())
 			}
 		}
+		h.syncArtifactsMutex.Lock()
+		for k, v := range h.syncArtifacts {
+			delete(h.syncArtifacts, k)
+			close(v)
+		}
+		h.syncArtifactsMutex.Unlock()
 	}()
 
 	if err := h.updateReposyncDatabase(dbCtx, reposync); err != nil {
-		_ = h.updateSyncing(false)
 		return err
+	}
+
+	packageMutex := sync.Mutex{}
+	packages := new(multierror.Group)
+
+	sem := semaphore.NewWeighted(syncMaxDownloads)
+	semAcquire := func() error {
+		semCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+
+		return sem.Acquire(semCtx, 1)
 	}
 
 	repoDB, err := h.getRepositoryDB(dbCtx)
@@ -59,9 +74,8 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 
 	syncer := mirror.NewSyncer(h.downloadDir(), h.getMirrorURLs(), mirror.WithKeyring(h.getKeyring()))
 
-	syncMutex := sync.Mutex{}
-
 	syncedPackages := 0
+	updateMetadata := false
 
 	paths, totalPackages := syncer.DownloadPackages(ctx, func(id string) bool {
 		has, _ := repoDB.HasPackageID(ctx, id)
@@ -72,63 +86,112 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 	})
 
 	for path := range paths {
-		if err := h.syncSemAcquire(ctx, 1, time.Minute); err != nil {
-			return err
+		updateMetadata = true
+
+		if err := semAcquire(); err != nil {
+			merr := packages.Wait()
+			h.logger.Error("package download semaphore timeout", "package", path, "error", err.Error())
+			return multierror.Append(merr, err)
 		}
 
-		go func(path string) {
+		path := path
+
+		packages.Go(func() error {
+			fullPath := filepath.Join(h.downloadDir(), filepath.Base(path))
+
+			defer func() {
+				sem.Release(1)
+				_ = os.Remove(fullPath)
+			}()
+
 			rc, err := syncer.FileReader(ctx, path)
 			if err != nil {
 				h.logger.Error("package download", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s retrieval: %s", path, err)
-				h.syncSemRelease(1, false)
-				return
+				return fmt.Errorf("package %s download: %w", path, err)
 			}
 			defer rc.Close()
 
-			fullPath := filepath.Join(h.downloadDir(), filepath.Base(path))
 			if err := copyTo(rc, fullPath); err != nil {
-				_ = os.Remove(fullPath)
 				h.logger.Error("package copy", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s copy: %s", path, err)
-				h.syncSemRelease(1, false)
-				return
+				return fmt.Errorf("package %s copy: %w", path, err)
 			}
 
 			pusher, err := orasrpm.NewRPMPusher(fullPath, h.Repository, h.Params.NameOptions...)
 			if err != nil {
-				_ = os.Remove(fullPath)
 				h.logger.Error("package push prepare", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s push initialization: %s", path, err)
-				h.syncSemRelease(1, false)
-				return
+				return fmt.Errorf("package %s push prepare: %w", path, err)
 			}
+
+			img, err := pusher.Image()
+			if err != nil {
+				h.logger.Error("package push prepare", "package", path, "error", err.Error())
+				return fmt.Errorf("package %s push prepare: %w", path, err)
+			}
+			manifest, err := img.Manifest()
+			if err != nil {
+				h.logger.Error("package oras manifest", "package", path, "error", err.Error())
+				return fmt.Errorf("package %s oras manifest: %w", path, err)
+			}
+			rpmName := manifest.Layers[0].Annotations[imagespec.AnnotationTitle]
+			if rpmName == "" {
+				h.logger.Error("package name from oras layer", "package", path, "error", err.Error())
+				return fmt.Errorf("package %s name from oras layer", path)
+			}
+
+			errCh := make(chan error, 1)
+
+			h.syncArtifactsMutex.Lock()
+			h.syncArtifacts[rpmName] = errCh
+			h.syncArtifactsMutex.Unlock()
 
 			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
-				_ = os.Remove(fullPath)
 				h.logger.Error("package push", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "package %s push: %s", path, err)
-				if _, _, err := oras.HeadManifest(pusher.Reference(), h.Params.RemoteOptions...); err != nil {
-					h.syncSemRelease(1, false)
-				}
-				return
+				errCh <- fmt.Errorf("package %s push: %w", path, err)
 			}
 
-			syncMutex.Lock()
-			syncedPackages++
-			reposync, err := h.addSyncedPackageReposyncDatabase(dbCtx, syncedPackages, totalPackages)
-			if err != nil {
-				h.logger.Error("reposync status update", "package", path, "error", err.Error())
-				h.logDatabase(dbCtx, yumdb.LogError, "reposync status update for %s: %s", path, err)
-			} else {
-				h.setReposync(reposync)
+			pkgCtx, cancel := context.WithTimeout(ctx, time.Minute)
+
+			var pkgErr error
+
+			select {
+			case <-pkgCtx.Done():
+				if errors.Is(pkgCtx.Err(), context.Canceled) {
+					pkgErr = fmt.Errorf("package %s processing timeout", path)
+				} else {
+					pkgErr = fmt.Errorf("package %s processing interrupted", path)
+				}
+			case pkgErr = <-errCh:
+				if pkgErr == nil {
+					packageMutex.Lock()
+					syncedPackages++
+					reposync, err := h.addSyncedPackageReposyncDatabase(dbCtx, syncedPackages, totalPackages)
+					if err != nil {
+						h.logger.Error("reposync status update", "package", path, "error", err.Error())
+						h.logDatabase(dbCtx, yumdb.LogError, "reposync status update for %s: %s", path, err)
+					} else {
+						h.setReposync(reposync)
+					}
+					packageMutex.Unlock()
+				}
 			}
-			syncMutex.Unlock()
-		}(path)
+
+			h.syncArtifactsMutex.Lock()
+			close(errCh)
+			delete(h.syncArtifacts, rpmName)
+			h.syncArtifactsMutex.Unlock()
+
+			cancel()
+
+			return pkgErr
+		})
 	}
 
 	if err := syncer.Err(); err != nil {
 		return err
+	} else if err := packages.Wait(); err != nil {
+		return err
+	} else if !updateMetadata {
+		return nil
 	}
 
 	pushRef, err := name.ParseReference(
@@ -158,15 +221,13 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 
 	if err := copyTo(syncer.RepomdXML(), repomdXMLPath); err != nil {
 		h.logger.Error("repomd.xml copy", "metadata", repomdXMLPath, "error", err.Error())
-		h.logDatabase(dbCtx, yumdb.LogError, "%s metadata copy: %s", repomdXMLPath, err)
-		return err
+		return fmt.Errorf("repomd.xml copy: %w", err)
 	}
 
 	repomdXML, err := orasrpm.NewGenericRPMMetadata(repomdXMLPath, orasrpm.RepomdXMLLayerType, nil)
 	if err != nil {
 		h.logger.Error("metadata push initialization", "metadata", repomdXMLPath, "error", err.Error())
-		h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", repomdXMLPath, err)
-		return err
+		return fmt.Errorf("metadata %s push initialization: %w", repomdXMLPath, err)
 	}
 
 	metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(repomdXML))
@@ -176,8 +237,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 
 		if err := copyTo(sigReader, repomdXMLSignaturePath); err != nil {
 			h.logger.Error("metadata copy", "metadata", repomdXMLSignaturePath, "error", err.Error())
-			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata copy: %s", repomdXMLSignaturePath, err)
-			return err
+			return fmt.Errorf("metadata %s copy: %w", repomdXMLSignaturePath, err)
 		}
 
 		repomdXMLSignature, err := orasrpm.NewGenericRPMMetadata(
@@ -187,8 +247,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 		)
 		if err != nil {
 			h.logger.Error("metadata push initialization", "metadata", repomdXMLSignaturePath, "error", err.Error())
-			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", repomdXMLSignaturePath, err)
-			return err
+			return fmt.Errorf("metadata %s push initialization: %w", repomdXMLSignaturePath, err)
 		}
 
 		metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(repomdXMLSignature))
@@ -204,8 +263,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 		rc, err := syncer.FileReader(ctx, path)
 		if err != nil {
 			h.logger.Error("metadata download", "metadata", path, "error", err.Error())
-			h.logDatabase(dbCtx, yumdb.LogError, "metadata %s retrieval: %s", path, err)
-			return err
+			return fmt.Errorf("metadata %s download: %w", path, err)
 		}
 
 		fullPath := filepath.Join(metadataDir, filepath.Base(path))
@@ -214,8 +272,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 		_ = rc.Close()
 		if err != nil {
 			h.logger.Error("metadata copy", "metadata", path, "error", err.Error())
-			h.logDatabase(dbCtx, yumdb.LogError, "metadata %s copy: %s", path, err)
-			return err
+			return fmt.Errorf("metadata %s copy: %w", path, err)
 		}
 
 		mediatype := orasrpm.GetRepomdDataLayerType(repomdData.Type)
@@ -225,7 +282,7 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 		metadataLayer, err := orasrpm.NewGenericRPMMetadata(fullPath, mediatype, annotations)
 		if err != nil {
 			h.logger.Error("metadata push initialization", "metadata", fullPath, "error", err.Error())
-			h.logDatabase(dbCtx, yumdb.LogError, "%s metadata push initialization: %s", fullPath, err)
+			return fmt.Errorf("metadata %s push initialization: %w", fullPath, err)
 		}
 		metadataLayers = append(metadataLayers, orasrpm.NewRPMMetadataLayer(metadataLayer))
 	}

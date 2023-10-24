@@ -47,16 +47,17 @@ import (
 )
 
 type Registry struct {
-	registry      distribution.Namespace
-	beskarConfig  *config.BeskarConfig
-	router        *mux.Router
-	server        *http.Server
-	member        *gossip.Member
-	manifestCache *cache.GroupCache
-	pluginManager *pluginManager
-	errCh         chan error
-	logger        dcontext.Logger
-	wait          sighandler.WaitFunc
+	registry       distribution.Namespace
+	beskarConfig   *config.BeskarConfig
+	router         *mux.Router
+	server         *http.Server
+	member         *gossip.Member
+	manifestCache  *cache.GroupCache
+	pluginManager  *pluginManager
+	errCh          chan error
+	logger         dcontext.Logger
+	wait           sighandler.WaitFunc
+	hashedHostname string
 }
 
 func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) {
@@ -83,7 +84,10 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 		return nil, nil, err
 	}
 
-	if err := auth.Register("beskar", newAccessController(beskarRegistry.getHashedHostname())); err != nil {
+	//nolint:gosec
+	beskarRegistry.hashedHostname = fmt.Sprintf("%x", md5.Sum([]byte(beskarConfig.Hostname)))
+
+	if err := auth.Register("beskar", newAccessController(beskarRegistry.hashedHostname)); err != nil {
 		return nil, nil, err
 	}
 
@@ -256,18 +260,11 @@ func (br *Registry) initGossip() (_ *mtls.CAPEM, errFn error) {
 	return caPem, nil
 }
 
-func (br *Registry) getHashedHostname() string {
-	//nolint:gosec
-	return fmt.Sprintf("%x", md5.Sum([]byte(br.beskarConfig.Hostname)))
-}
-
 func (br *Registry) initMTLS(ln net.Listener, caPEM *mtls.CAPEM, tlsConfig *tls.Config) error {
 	localIPs, err := netutil.LocalIPs()
 	if err != nil {
 		return err
 	}
-
-	hashedHostname := br.getHashedHostname()
 
 	registryServerConfig, err := mtls.GenerateServerConfig(
 		bytes.NewReader(caPEM.Cert),
@@ -276,7 +273,7 @@ func (br *Registry) initMTLS(ln net.Listener, caPEM *mtls.CAPEM, tlsConfig *tls.
 		mtls.WithCertRequestIPs(localIPs...),
 		mtls.WithCertRequestHostnames(
 			br.beskarConfig.Hostname,
-			hashedHostname,
+			br.hashedHostname,
 		),
 	)
 	if err != nil {
@@ -287,7 +284,7 @@ func (br *Registry) initMTLS(ln net.Listener, caPEM *mtls.CAPEM, tlsConfig *tls.
 		tlsConfig = registryServerConfig
 	} else {
 		tlsConfig.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
-			if hello.ServerName == hashedHostname {
+			if hello.ServerName == br.hashedHostname {
 				return registryServerConfig, nil
 			}
 			return nil, nil
@@ -492,6 +489,16 @@ func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) 
 		}
 
 		br.logger.Debugf("Sending manifest %s event to plugin", event.Repository)
+
+		event.Origin = eventv1.Origin_ORIGIN_EXTERNAL
+
+		// plugins are using mTLS and uses hashed hostname as SNI
+		req, err := dcontext.GetRequest(ctx)
+		if err != nil {
+			return err
+		} else if req.TLS != nil || req.TLS.ServerName == br.hashedHostname {
+			event.Origin = eventv1.Origin_ORIGIN_PLUGIN
+		}
 
 		return plugin.sendEvent(ctx, event, nil)
 	default:
