@@ -6,12 +6,14 @@ package yumrepository
 import (
 	"bytes"
 	"context"
+	"crypto/md5" //nolint:gosec
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	_ "unsafe" // for go:linkname
 
 	"github.com/cavaliergopher/rpm"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -23,28 +25,36 @@ import (
 	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 )
 
-func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v1.Manifest) (errFn error) {
+func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v1.Manifest, manifestDigest string) (errFn error) {
+	defer func() {
+		if errFn != nil {
+			ref := filepath.Join(h.Repository, "packages@"+manifestDigest)
+			if err := h.DeleteManifest(ref); err != nil {
+				h.logger.Error("delete package manifest", "digest", manifestDigest, "error", err.Error())
+				h.logDatabase(ctx, yumdb.LogError, "delete package manifest %s: %s", manifestDigest, err)
+			}
+		}
+	}()
+
 	packageLayer, err := oras.GetLayer(packageManifest, orasrpm.RPMPackageLayerType)
 	if err != nil {
 		return err
 	}
-	ref := filepath.Join(h.Repository, "packages@sha256:"+packageLayer.Digest.Hex)
+	ref := filepath.Join(h.Repository, "packages@"+packageLayer.Digest.String())
 
 	packageName := packageLayer.Annotations[imagespec.AnnotationTitle]
 	packagePath := filepath.Join(h.downloadDir(), packageName)
 
 	defer func() {
-		h.syncSemRelease(1, false)
-
-		if errFn == nil {
-			return
+		h.syncArtifactsMutex.RLock()
+		if errCh, ok := h.syncArtifacts[packageName]; ok {
+			errCh <- errFn
 		}
-		h.logger.Error("process package manifest", "package", packageName, "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process package %s manifest: %s", packageName, errFn)
+		h.syncArtifactsMutex.RUnlock()
 
-		if err := h.DeleteManifest(ref); err != nil {
-			h.logger.Error("delete package manifest", "package", packageName, "error", err.Error())
-			h.logDatabase(ctx, yumdb.LogError, "delete package %s manifest: %s", packageName, err)
+		if errFn != nil {
+			h.logger.Error("process package manifest", "package", packageName, "error", errFn.Error())
+			h.logDatabase(ctx, yumdb.LogError, "process package %s manifest: %s", packageName, errFn)
 		}
 	}()
 
@@ -80,11 +90,10 @@ func (h *Handler) processPackageManifest(ctx context.Context, packageManifest *v
 
 func (h *Handler) generateAndPushMetadata(ctx context.Context) (errFn error) {
 	defer func() {
-		if errFn == nil {
-			return
+		if errFn != nil {
+			h.logger.Error("metadata generation", "error", errFn.Error())
+			h.logDatabase(ctx, yumdb.LogError, "metadata generation: %s", errFn)
 		}
-		h.logger.Error("metadata generation", "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "metadata generation: %s", errFn)
 	}()
 
 	db, err := h.getMetadataDB(ctx)
@@ -152,11 +161,10 @@ func (h *Handler) deletePackageManifest(ctx context.Context, packageManifest *v1
 	packageID := packageLayer.Digest.Hex
 
 	defer func() {
-		if errFn == nil {
-			return
+		if errFn != nil {
+			h.logger.Error("process package manifest removal", "package", packageName, "error", errFn.Error())
+			h.logDatabase(ctx, yumdb.LogError, "process package %s manifest removal: %s", packageName, errFn)
 		}
-		h.logger.Error("process package manifest removal", "package", packageName, "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process package %s manifest removal: %s", packageName, errFn)
 	}()
 
 	if !h.getMirror() {
@@ -181,7 +189,7 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 	}
 	defer r.Close()
 
-	if err := rpm.MD5Check(r); err != nil {
+	if err := md5Check(r); err != nil {
 		return nil, err
 	} else if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return nil, err
@@ -222,4 +230,37 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 		Verified:     keyring != nil,
 		GPGSignature: pkg.GPGSignature().String(),
 	}, nil
+}
+
+//go:linkname readSigHeader github.com/cavaliergopher/rpm.readSigHeader
+func readSigHeader(r io.Reader) (*rpm.Header, error)
+
+func md5Check(r io.Reader) error {
+	sigheader, err := readSigHeader(r)
+	if err != nil {
+		return err
+	}
+	payloadSize := sigheader.GetTag(270).Int64() // RPMSIGTAG_LONGSIGSIZE
+	if payloadSize == 0 {
+		payloadSize = sigheader.GetTag(1000).Int64() // RPMSIGTAG_SIGSIZE
+		if payloadSize == 0 {
+			return fmt.Errorf("tag not found: RPMSIGTAG_SIZE")
+		}
+	}
+	expect := sigheader.GetTag(1004).Bytes() // RPMSIGTAG_MD5
+	if expect == nil {
+		return fmt.Errorf("tag not found: RPMSIGTAG_MD5")
+	}
+	//nolint:gosec
+	h := md5.New()
+	if n, err := io.Copy(h, r); err != nil {
+		return err
+	} else if n != payloadSize {
+		return rpm.ErrMD5CheckFailed
+	}
+	actual := h.Sum(nil)
+	if !bytes.Equal(expect, actual) {
+		return rpm.ErrMD5CheckFailed
+	}
+	return nil
 }

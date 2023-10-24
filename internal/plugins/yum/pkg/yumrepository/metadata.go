@@ -22,7 +22,17 @@ import (
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
-func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest) (errFn error) {
+func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest *v1.Manifest, manifestDigest string) (errFn error) {
+	defer func() {
+		if errFn != nil {
+			ref := filepath.Join(h.Repository, "repodata@"+manifestDigest)
+			if err := h.DeleteManifest(ref); err != nil {
+				h.logger.Error("delete metadata manifest", "digest", manifestDigest, "error", err.Error())
+				h.logDatabase(ctx, yumdb.LogError, "delete metadata manifest %s: %s", manifestDigest, err)
+			}
+		}
+	}()
+
 	dataType := ""
 
 	packageLayer, err := oras.GetLayerFilter(metadataManifest, func(mediatype types.MediaType) bool {
@@ -37,21 +47,15 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 		return err
 	}
 
-	ref := filepath.Join(h.Repository, "repodata@sha256:"+packageLayer.Digest.Hex)
+	ref := filepath.Join(h.Repository, "repodata@"+packageLayer.Digest.String())
 
 	metadataFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
 	metadataPath := filepath.Join(h.downloadDir(), metadataFilename)
 
 	defer func() {
-		if errFn == nil {
-			return
-		}
-		h.logger.Error("process metadata manifest", "metadata", metadataFilename, "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest: %s", metadataFilename, errFn)
-
-		if err := h.DeleteManifest(ref); err != nil {
-			h.logger.Error("delete metadata manifest", "metadata", metadataFilename, "error", err.Error())
-			h.logDatabase(ctx, yumdb.LogError, "delete metadata %s manifest: %s", metadataFilename, err)
+		if errFn != nil {
+			h.logger.Error("process metadata manifest", "metadata", metadataFilename, "error", errFn.Error())
+			h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest: %s", metadataFilename, errFn)
 		}
 	}()
 
@@ -113,11 +117,10 @@ func (h *Handler) deleteMetadataManifest(ctx context.Context, metadataManifest *
 	metadataFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
 
 	defer func() {
-		if errFn == nil {
-			return
+		if errFn != nil {
+			h.logger.Error("process metadata manifest removal", "metadata", metadataFilename, "error", errFn.Error())
+			h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest removal: %s", metadataFilename, errFn)
 		}
-		h.logger.Error("process metadata manifest removal", "metadata", metadataFilename, "error", errFn.Error())
-		h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest removal: %s", metadataFilename, errFn)
 	}()
 
 	return h.removeExtraMetadataFromDatabase(ctx, dataType)

@@ -12,6 +12,12 @@ enum Action {
   ACTION_STOP = 4;
 }
 
+enum Origin {
+  ORIGIN_UNSPECIFIED = 0;
+  ORIGIN_EXTERNAL = 1;
+  ORIGIN_PLUGIN = 2;
+}
+
 // EventPayload defines an event payload.
 message EventPayload {
   // repository is required for all actions
@@ -20,4 +26,5 @@ message EventPayload {
   string mediatype = 3;
   bytes payload = 4;
   Action action = 5;
+  Origin origin = 6;
 }
