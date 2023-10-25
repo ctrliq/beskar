@@ -74,11 +74,25 @@ func (p *Plugin) RemoveRepositoryPackage(ctx context.Context, repository string,
 	return p.repositoryManager.Get(ctx, repository).RemoveRepositoryPackage(ctx, id)
 }
 
+func (p *Plugin) RemoveRepositoryPackageByTag(ctx context.Context, repository string, tag string) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).RemoveRepositoryPackageByTag(ctx, tag)
+}
+
 func (p *Plugin) GetRepositoryPackage(ctx context.Context, repository string, id string) (repositoryPackage *apiv1.RepositoryPackage, err error) {
 	if err := checkRepository(repository); err != nil {
 		return nil, err
 	}
 	return p.repositoryManager.Get(ctx, repository).GetRepositoryPackage(ctx, id)
+}
+
+func (p *Plugin) GetRepositoryPackageByTag(ctx context.Context, repository string, tag string) (repositoryPackage *apiv1.RepositoryPackage, err error) {
+	if err := checkRepository(repository); err != nil {
+		return nil, err
+	}
+	return p.repositoryManager.Get(ctx, repository).GetRepositoryPackageByTag(ctx, tag)
 }
 
 func (p *Plugin) ListRepositoryPackages(ctx context.Context, repository string, page *apiv1.Page) (repositoryPackages []*apiv1.RepositoryPackage, err error) {

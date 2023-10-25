@@ -159,6 +159,45 @@ func MakeEndpointOfGetRepositoryPackage(s YUM) endpoint.Endpoint {
 	}
 }
 
+type GetRepositoryPackageByTagRequest struct {
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+}
+
+// ValidateGetRepositoryPackageByTagRequest creates a validator for GetRepositoryPackageByTagRequest.
+func ValidateGetRepositoryPackageByTagRequest(newSchema func(*GetRepositoryPackageByTagRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*GetRepositoryPackageByTagRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type GetRepositoryPackageByTagResponse struct {
+	RepositoryPackages *RepositoryPackage `json:"repository_packages"`
+	Err                error              `json:"-"`
+}
+
+func (r *GetRepositoryPackageByTagResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *GetRepositoryPackageByTagResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfGetRepositoryPackageByTag creates the endpoint for s.GetRepositoryPackageByTag.
+func MakeEndpointOfGetRepositoryPackageByTag(s YUM) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*GetRepositoryPackageByTagRequest)
+		repositoryPackages, err := s.GetRepositoryPackageByTag(
+			ctx,
+			req.Repository,
+			req.Tag,
+		)
+		return &GetRepositoryPackageByTagResponse{
+			RepositoryPackages: repositoryPackages,
+			Err:                err,
+		}, nil
+	}
+}
+
 type GetRepositorySyncStatusRequest struct {
 	Repository string `json:"repository"`
 }
@@ -306,6 +345,43 @@ func MakeEndpointOfRemoveRepositoryPackage(s YUM) endpoint.Endpoint {
 			req.Id,
 		)
 		return &RemoveRepositoryPackageResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type RemoveRepositoryPackageByTagRequest struct {
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+}
+
+// ValidateRemoveRepositoryPackageByTagRequest creates a validator for RemoveRepositoryPackageByTagRequest.
+func ValidateRemoveRepositoryPackageByTagRequest(newSchema func(*RemoveRepositoryPackageByTagRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*RemoveRepositoryPackageByTagRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type RemoveRepositoryPackageByTagResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *RemoveRepositoryPackageByTagResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *RemoveRepositoryPackageByTagResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfRemoveRepositoryPackageByTag creates the endpoint for s.RemoveRepositoryPackageByTag.
+func MakeEndpointOfRemoveRepositoryPackageByTag(s YUM) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*RemoveRepositoryPackageByTagRequest)
+		err := s.RemoveRepositoryPackageByTag(
+			ctx,
+			req.Repository,
+			req.Tag,
+		)
+		return &RemoveRepositoryPackageByTagResponse{
 			Err: err,
 		}, nil
 	}

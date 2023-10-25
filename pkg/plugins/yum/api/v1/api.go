@@ -77,6 +77,7 @@ type SyncStatus struct {
 //kun:oas basePath=/artifacts/yum/api/v1
 //kun:oas docsPath=/doc/swagger.yaml
 //kun:oas tags=yum
+//nolint:interfacebloat
 type YUM interface {
 	// Create a YUM repository.
 	//kun:op POST /repository
@@ -118,10 +119,20 @@ type YUM interface {
 	//kun:success statusCode=200
 	GetRepositoryPackage(ctx context.Context, repository string, id string) (repositoryPackages *RepositoryPackage, err error)
 
+	// Get RPM package by tag from YUM repository.
+	//kun:op GET /repository/package:bytag
+	//kun:success statusCode=200
+	GetRepositoryPackageByTag(ctx context.Context, repository string, tag string) (repositoryPackages *RepositoryPackage, err error)
+
 	// Remove RPM package from YUM repository.
 	//kun:op DELETE /repository/package
 	//kun:success statusCode=200
 	RemoveRepositoryPackage(ctx context.Context, repository string, id string) (err error)
+
+	// Remove RPM package by tag from YUM repository.
+	//kun:op DELETE /repository/package:bytag
+	//kun:success statusCode=200
+	RemoveRepositoryPackageByTag(ctx context.Context, repository string, tag string) (err error)
 
 	// List RPM packages for a YUM repository.
 	//kun:op GET /repository/package:list

@@ -248,6 +248,41 @@ func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err e
 	return nil
 }
 
+func (h *Handler) RemoveRepositoryPackageByTag(ctx context.Context, tag string) (err error) {
+	if !h.Started() {
+		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if h.getMirror() {
+		return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("could not delete package for mirror repository"))
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	pkg, err := db.GetPackageByTag(ctx, tag)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	} else if pkg.Tag == "" {
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with tag %s not found", tag))
+	}
+
+	tagRef := filepath.Join(h.Repository, "packages:"+tag)
+
+	digest, err := h.GetManifestDigest(tagRef)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	digestRef := filepath.Join(h.Repository, "packages@"+digest)
+
+	if err := h.DeleteManifest(digestRef); err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return nil
+}
+
 func (h *Handler) GetRepositoryPackage(ctx context.Context, id string) (repositoryPackage *apiv1.RepositoryPackage, err error) {
 	if !h.Started() {
 		return nil, werror.Wrap(gcode.ErrUnavailable, err)
@@ -259,6 +294,24 @@ func (h *Handler) GetRepositoryPackage(ctx context.Context, id string) (reposito
 	}
 
 	pkg, err := db.GetPackage(ctx, id)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return toRepositoryPackageAPI(pkg), nil
+}
+
+func (h *Handler) GetRepositoryPackageByTag(ctx context.Context, tag string) (repositoryPackage *apiv1.RepositoryPackage, err error) {
+	if !h.Started() {
+		return nil, werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	pkg, err := db.GetPackageByTag(ctx, tag)
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}

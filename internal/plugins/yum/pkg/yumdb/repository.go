@@ -151,6 +151,31 @@ func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryP
 	return pkg, nil
 }
 
+func (db *RepositoryDB) GetPackageByTag(ctx context.Context, tag string) (*RepositoryPackage, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT * FROM packages WHERE tag = ? LIMIT 1", tag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	pkg := new(RepositoryPackage)
+
+	for rows.Next() {
+		if err := rows.StructScan(pkg); err != nil {
+			return nil, err
+		}
+	}
+
+	return pkg, nil
+}
+
 type WalkPackageFunc func(*RepositoryPackage) error
 
 func (db *RepositoryDB) WalkPackages(ctx context.Context, walkFn WalkPackageFunc) error {
