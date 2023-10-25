@@ -25,6 +25,8 @@ const timeFormat = time.DateTime + " MST"
 func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.RepositoryProperties) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if properties == nil {
+		return werror.Wrap(gcode.ErrInvalidArgument, fmt.Errorf("properties can't be nil"))
 	}
 
 	db, err := h.getStatusDB(ctx)
@@ -82,6 +84,8 @@ func (h *Handler) DeleteRepository(_ context.Context) (err error) {
 func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.RepositoryProperties) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if properties == nil {
+		return werror.Wrap(gcode.ErrInvalidArgument, fmt.Errorf("properties can't be nil"))
 	}
 
 	db, err := h.getStatusDB(ctx)
@@ -92,6 +96,8 @@ func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.Reposi
 	propertiesDB, err := db.GetProperties(ctx)
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
+	} else if !propertiesDB.Created {
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository is not created"))
 	}
 
 	if properties.Mirror != nil {

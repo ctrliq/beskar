@@ -8,7 +8,10 @@ import (
 	"regexp"
 )
 
-const RepositoryRegex = "^(artifacts/static/[a-z0-9]+(?:[/._-][a-z0-9]+)*)$"
+const (
+	RepositoryRegex = "^(artifacts/static/[a-z0-9]+(?:[/._-][a-z0-9]+)*)$"
+	URLPath         = "/artifacts/static/api/v1"
+)
 
 var repositoryMatcher = regexp.MustCompile(RepositoryRegex)
 

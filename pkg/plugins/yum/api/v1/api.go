@@ -8,7 +8,10 @@ import (
 	"regexp"
 )
 
-const RepositoryRegex = "^(artifacts/yum/[a-z0-9]+(?:[/._-][a-z0-9]+)*)$"
+const (
+	RepositoryRegex = "^(artifacts/yum/[a-z0-9]+(?:[/._-][a-z0-9]+)*)$"
+	URLPath         = "/artifacts/yum/api/v1"
+)
 
 var repositoryMatcher = regexp.MustCompile(RepositoryRegex)
 
@@ -77,8 +80,7 @@ type SyncStatus struct {
 //kun:oas basePath=/artifacts/yum/api/v1
 //kun:oas docsPath=/doc/swagger.yaml
 //kun:oas tags=yum
-//nolint:interfacebloat
-type YUM interface {
+type YUM interface { //nolint:interfacebloat
 	// Create a YUM repository.
 	//kun:op POST /repository
 	//kun:success statusCode=200
