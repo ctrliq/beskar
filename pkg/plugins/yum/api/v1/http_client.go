@@ -236,6 +236,60 @@ func (c *HTTPClient) GetRepositoryPackage(ctx context.Context, repository string
 	return respBody.RepositoryPackages, nil
 }
 
+func (c *HTTPClient) GetRepositoryPackageByTag(ctx context.Context, repository string, tag string) (repositoryPackages *RepositoryPackage, err error) {
+	codec := c.codecs.EncodeDecoder("GetRepositoryPackageByTag")
+
+	path := "/repository/package:bytag"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+		Tag        string `json:"tag"`
+	}{
+		Repository: repository,
+		Tag:        tag,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return nil, err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return nil, err
+	}
+
+	respBody := &GetRepositoryPackageByTagResponse{}
+	err = codec.DecodeSuccessResponse(_resp.Body, respBody.Body())
+	if err != nil {
+		return nil, err
+	}
+	return respBody.RepositoryPackages, nil
+}
+
 func (c *HTTPClient) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *SyncStatus, err error) {
 	codec := c.codecs.EncodeDecoder("GetRepositorySyncStatus")
 
@@ -412,6 +466,55 @@ func (c *HTTPClient) RemoveRepositoryPackage(ctx context.Context, repository str
 	}{
 		Repository: repository,
 		Id:         id,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "DELETE", u.String(), reqBodyReader)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (c *HTTPClient) RemoveRepositoryPackageByTag(ctx context.Context, repository string, tag string) (err error) {
+	codec := c.codecs.EncodeDecoder("RemoveRepositoryPackageByTag")
+
+	path := "/repository/package:bytag"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+		Tag        string `json:"tag"`
+	}{
+		Repository: repository,
+		Tag:        tag,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
 	if err != nil {

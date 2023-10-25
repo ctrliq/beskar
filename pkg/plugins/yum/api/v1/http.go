@@ -80,6 +80,20 @@ func NewHTTPRouter(svc YUM, codecs httpcodec.Codecs, opts ...httpoption.Option) 
 		),
 	)
 
+	codec = codecs.EncodeDecoder("GetRepositoryPackageByTag")
+	validator = options.RequestValidator("GetRepositoryPackageByTag")
+	r.Method(
+		"GET", "/repository/package:bytag",
+		kithttp.NewServer(
+			MakeEndpointOfGetRepositoryPackageByTag(svc),
+			decodeGetRepositoryPackageByTagRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	codec = codecs.EncodeDecoder("GetRepositorySyncStatus")
 	validator = options.RequestValidator("GetRepositorySyncStatus")
 	r.Method(
@@ -129,6 +143,20 @@ func NewHTTPRouter(svc YUM, codecs httpcodec.Codecs, opts ...httpoption.Option) 
 		kithttp.NewServer(
 			MakeEndpointOfRemoveRepositoryPackage(svc),
 			decodeRemoveRepositoryPackageRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
+	codec = codecs.EncodeDecoder("RemoveRepositoryPackageByTag")
+	validator = options.RequestValidator("RemoveRepositoryPackageByTag")
+	r.Method(
+		"DELETE", "/repository/package:bytag",
+		kithttp.NewServer(
+			MakeEndpointOfRemoveRepositoryPackageByTag(svc),
+			decodeRemoveRepositoryPackageByTagRequest(codec, validator),
 			httpcodec.MakeResponseEncoder(codec, 200),
 			append(kitOptions,
 				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
@@ -231,6 +259,22 @@ func decodeGetRepositoryPackageRequest(codec httpcodec.Codec, validator httpopti
 	}
 }
 
+func decodeGetRepositoryPackageByTagRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req GetRepositoryPackageByTagRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
 func decodeGetRepositorySyncStatusRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req GetRepositorySyncStatusRequest
@@ -282,6 +326,22 @@ func decodeListRepositoryPackagesRequest(codec httpcodec.Codec, validator httpop
 func decodeRemoveRepositoryPackageRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req RemoveRepositoryPackageRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeRemoveRepositoryPackageByTagRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req RemoveRepositoryPackageByTagRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err

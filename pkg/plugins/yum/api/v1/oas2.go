@@ -97,6 +97,29 @@ paths:
           schema:
             $ref: "#/definitions/RemoveRepositoryPackageRequestBody"
       %s
+  /repository/package:bytag:
+    get:
+      description: "Get RPM package by tag from YUM repository."
+      operationId: "GetRepositoryPackageByTag"
+      tags:
+        - yum
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/GetRepositoryPackageByTagRequestBody"
+      %s
+    delete:
+      description: "Remove RPM package by tag from YUM repository."
+      operationId: "RemoveRepositoryPackageByTag"
+      tags:
+        - yum
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/RemoveRepositoryPackageByTagRequestBody"
+      %s
   /repository/sync:status:
     get:
       description: "Get YUM repository sync status."
@@ -156,6 +179,8 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "UpdateRepository", 200, &UpdateRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositoryPackage", 200, &GetRepositoryPackageResponse{}),
 		oas2.GetOASResponses(schema, "RemoveRepositoryPackage", 200, &RemoveRepositoryPackageResponse{}),
+		oas2.GetOASResponses(schema, "GetRepositoryPackageByTag", 200, &GetRepositoryPackageByTagResponse{}),
+		oas2.GetOASResponses(schema, "RemoveRepositoryPackageByTag", 200, &RemoveRepositoryPackageByTagResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncStatus", 200, &GetRepositorySyncStatusResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryLogs", 200, &ListRepositoryLogsResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryPackages", 200, &ListRepositoryPackagesResponse{}),
@@ -188,6 +213,12 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "GetRepositoryPackage", 200, (&GetRepositoryPackageResponse{}).Body())
 
+	oas2.AddDefinition(defs, "GetRepositoryPackageByTagRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		Tag        string `json:"tag"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "GetRepositoryPackageByTag", 200, (&GetRepositoryPackageByTagResponse{}).Body())
+
 	oas2.AddDefinition(defs, "GetRepositorySyncStatusRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
 	}{}))
@@ -210,6 +241,12 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		Id         string `json:"id"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "RemoveRepositoryPackage", 200, (&RemoveRepositoryPackageResponse{}).Body())
+
+	oas2.AddDefinition(defs, "RemoveRepositoryPackageByTagRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		Tag        string `json:"tag"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "RemoveRepositoryPackageByTag", 200, (&RemoveRepositoryPackageByTagResponse{}).Body())
 
 	oas2.AddDefinition(defs, "SyncRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
