@@ -496,7 +496,7 @@ func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) 
 		req, err := dcontext.GetRequest(ctx)
 		if err != nil {
 			return err
-		} else if req.TLS != nil || req.TLS.ServerName == br.hashedHostname {
+		} else if req.TLS != nil && req.TLS.ServerName == br.hashedHostname {
 			event.Origin = eventv1.Origin_ORIGIN_PLUGIN
 		}
 
