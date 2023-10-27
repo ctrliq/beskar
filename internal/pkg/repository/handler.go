@@ -44,7 +44,8 @@ type RepoHandler struct {
 	queueMutex sync.RWMutex
 	Queued     chan struct{}
 
-	Stopped atomic.Bool
+	Stopped   atomic.Bool
+	startedCh chan struct{}
 
 	cancel context.CancelFunc
 }
@@ -54,6 +55,7 @@ func NewRepoHandler(repository string, params *HandlerParams, cancel context.Can
 		Repository: repository,
 		Params:     params,
 		Queued:     make(chan struct{}, 1),
+		startedCh:  make(chan struct{}),
 		cancel:     cancel,
 	}
 }
@@ -89,6 +91,8 @@ func (rh *RepoHandler) EventQueueUpdate() {
 }
 
 func (rh *RepoHandler) Started() bool {
+	// closed when started
+	<-rh.startedCh
 	if rh.Stopped.Load() {
 		<-rh.Queued
 		return false

@@ -40,12 +40,17 @@ func (m *Manager[H]) remove(repository string) {
 }
 
 func (m *Manager[H]) Get(ctx context.Context, repository string) H {
-	m.repositoryMutex.RLock()
-	r, ok := m.repositories[repository]
-	m.repositoryMutex.RUnlock()
+	m.repositoryMutex.Lock()
 
-	if ok && r.Started() {
-		return r
+	r, ok := m.repositories[repository]
+
+	if ok {
+		m.repositoryMutex.Unlock()
+		if r.Started() {
+			return r
+		}
+		// TODO: in case of repeated start failure this will be a problem
+		m.repositoryMutex.Lock()
 	}
 
 	logger := log.GetContextLogger(ctx)
@@ -53,14 +58,17 @@ func (m *Manager[H]) Get(ctx context.Context, repository string) H {
 
 	handlerCtx, cancel := context.WithCancel(context.Background())
 
-	rh := m.newHandler(logger, NewRepoHandler(repository, m.repositoryParams, cancel))
+	parentHandler := NewRepoHandler(repository, m.repositoryParams, cancel)
+	rh := m.newHandler(logger, parentHandler)
+
+	m.repositories[repository] = rh
+
+	m.repositoryMutex.Unlock()
+
 	rh.Start(handlerCtx)
+	close(parentHandler.startedCh)
 
 	logger.Info("repository handler started")
-
-	m.repositoryMutex.Lock()
-	m.repositories[repository] = rh
-	m.repositoryMutex.Unlock()
 
 	return rh
 }
