@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RussellLuo/kun/pkg/werror"
+	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/hashicorp/go-multierror"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -72,14 +74,25 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 	}
 	defer repoDB.Close(false)
 
+	dbPackages := make(map[string]struct{})
+
+	err = repoDB.WalkPackages(dbCtx, func(pkg *yumdb.RepositoryPackage) error {
+		dbPackages[pkg.ID] = struct{}{}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	syncer := mirror.NewSyncer(h.downloadDir(), h.getMirrorURLs(), mirror.WithKeyring(h.getKeyring()))
 
 	syncedPackages := 0
 	updateMetadata := false
 
 	paths, totalPackages := syncer.DownloadPackages(ctx, func(id string) bool {
-		has, _ := repoDB.HasPackageID(ctx, id)
+		_, has := dbPackages[id]
 		if has {
+			delete(dbPackages, id)
 			syncedPackages++
 		}
 		return !has
@@ -138,6 +151,26 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 				return fmt.Errorf("package %s name from oras layer", path)
 			}
 
+			pkgTag := ""
+			if pt, ok := pusher.Reference().(name.Tag); ok {
+				pkgTag = pt.TagStr()
+			}
+			if pkgTag == "" {
+				h.logger.Error("package tag empty", "package", path)
+				return fmt.Errorf("package %s tag: empty", path)
+			}
+
+			pkg, err := repoDB.GetPackageByTag(dbCtx, pkgTag)
+			if err != nil {
+				h.logger.Error("package database by tag", "package", path, "tag", pkgTag, "error", err.Error())
+				return fmt.Errorf("package %s database by tag: %w", path, err)
+			} else if pkg.ID != "" {
+				// ensure to not delete an overridden package
+				packageMutex.Lock()
+				delete(dbPackages, pkg.ID)
+				packageMutex.Unlock()
+			}
+
 			errCh := make(chan error, 1)
 
 			h.syncArtifactsMutex.Lock()
@@ -173,6 +206,83 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 					}
 					packageMutex.Unlock()
 				}
+			}
+
+			h.syncArtifactsMutex.Lock()
+			close(errCh)
+			delete(h.syncArtifacts, rpmName)
+			h.syncArtifactsMutex.Unlock()
+
+			cancel()
+
+			return pkgErr
+		})
+	}
+
+	if err := syncer.Err(); err != nil {
+		return err
+	} else if err := packages.Wait(); err != nil {
+		return err
+	} else if !updateMetadata && len(dbPackages) == 0 {
+		return nil
+	}
+
+	for pkgID := range dbPackages {
+		updateMetadata = true
+		pkgID := pkgID
+
+		if err := semAcquire(); err != nil {
+			merr := packages.Wait()
+			h.logger.Error("package removal semaphore timeout", "pkgid", pkgID, "error", err.Error())
+			return multierror.Append(merr, err)
+		}
+
+		packages.Go(func() error {
+			defer sem.Release(1)
+
+			pkg, err := repoDB.GetPackage(dbCtx, pkgID)
+			if err != nil {
+				h.logger.Error("package database by id", "pkgid", pkgID, "error", err.Error())
+				return fmt.Errorf("package id %s database: %w", pkgID, err)
+			}
+
+			arch := pkg.Architecture
+			if pkg.SourceRPM == "" {
+				arch = "src"
+			}
+			rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name, pkg.Version, pkg.Release, arch)
+
+			tagRef := filepath.Join(h.Repository, "packages:"+pkg.Tag)
+
+			digest, err := h.GetManifestDigest(tagRef)
+			if err != nil {
+				return werror.Wrap(gcode.ErrInternal, err)
+			}
+
+			digestRef := filepath.Join(h.Repository, "packages@"+digest)
+
+			errCh := make(chan error, 1)
+
+			h.syncArtifactsMutex.Lock()
+			h.syncArtifacts[rpmName] = errCh
+			h.syncArtifactsMutex.Unlock()
+
+			if err := h.DeleteManifest(digestRef); err != nil {
+				return werror.Wrap(gcode.ErrInternal, err)
+			}
+
+			pkgCtx, cancel := context.WithTimeout(ctx, time.Minute)
+
+			var pkgErr error
+
+			select {
+			case <-pkgCtx.Done():
+				if errors.Is(pkgCtx.Err(), context.Canceled) {
+					pkgErr = fmt.Errorf("package %s removal processing timeout", rpmName)
+				} else {
+					pkgErr = fmt.Errorf("package %s removal processing interrupted", rpmName)
+				}
+			case pkgErr = <-errCh:
 			}
 
 			h.syncArtifactsMutex.Lock()

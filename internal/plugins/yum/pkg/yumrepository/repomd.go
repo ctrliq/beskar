@@ -5,6 +5,7 @@ package yumrepository
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -97,7 +98,7 @@ func (x *metaXML) Path() string {
 }
 
 func (x *metaXML) Digest() (string, string) {
-	return "sha256", fmt.Sprintf("%x", x.checkSum.Sum(nil))
+	return "sha256", hex.EncodeToString(x.checkSum.Sum(nil))
 }
 
 func (x *metaXML) Size() int64 {
@@ -312,12 +313,12 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 			Type: string(yummeta.PrimaryDataType),
 			Checksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.primaryXML.checkSum.Sum(nil)),
+				Value: hex.EncodeToString(r.primaryXML.checkSum.Sum(nil)),
 			},
 			Size: r.primaryXML.size,
 			OpenChecksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.primaryXML.openChecksum.Sum(nil)),
+				Value: hex.EncodeToString(r.primaryXML.openChecksum.Sum(nil)),
 			},
 			OpenSize: r.primaryXML.openSize,
 			Location: &yummeta.RepoMdDataLocation{
@@ -329,12 +330,12 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 			Type: string(yummeta.FilelistsDataType),
 			Checksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.filelistsXML.checkSum.Sum(nil)),
+				Value: hex.EncodeToString(r.filelistsXML.checkSum.Sum(nil)),
 			},
 			Size: r.filelistsXML.size,
 			OpenChecksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.filelistsXML.openChecksum.Sum(nil)),
+				Value: hex.EncodeToString(r.filelistsXML.openChecksum.Sum(nil)),
 			},
 			OpenSize: r.filelistsXML.openSize,
 			Location: &yummeta.RepoMdDataLocation{
@@ -346,12 +347,12 @@ func (r *repomd) push(params *repository.HandlerParams, extraMetadatas []*yumdb.
 			Type: string(yummeta.OtherDataType),
 			Checksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.otherXML.checkSum.Sum(nil)),
+				Value: hex.EncodeToString(r.otherXML.checkSum.Sum(nil)),
 			},
 			Size: r.otherXML.size,
 			OpenChecksum: &yummeta.RepoMdDataChecksum{
 				Type:  "sha256",
-				Value: fmt.Sprintf("%x", r.otherXML.openChecksum.Sum(nil)),
+				Value: hex.EncodeToString(r.otherXML.openChecksum.Sum(nil)),
 			},
 			OpenSize: r.otherXML.openSize,
 			Location: &yummeta.RepoMdDataLocation{

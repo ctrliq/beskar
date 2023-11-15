@@ -33,6 +33,7 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	err = db.WalkLogs(ctx, func(log *staticdb.Log) error {
 		logs = append(logs, apiv1.RepositoryLog{
@@ -58,6 +59,7 @@ func (h *Handler) RemoveRepositoryFile(ctx context.Context, tag string) (err err
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	file, err := db.GetFileByTag(ctx, tag)
 	if err != nil {
@@ -91,6 +93,7 @@ func (h *Handler) GetRepositoryFileByTag(ctx context.Context, tag string) (repos
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	file, err := db.GetFileByTag(ctx, tag)
 	if err != nil {
@@ -111,6 +114,7 @@ func (h *Handler) GetRepositoryFileByName(ctx context.Context, name string) (rep
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	file, err := db.GetFileByName(ctx, name)
 	if err != nil {
@@ -131,6 +135,7 @@ func (h *Handler) ListRepositoryFiles(ctx context.Context, _ *apiv1.Page) (repos
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	err = db.WalkFiles(ctx, func(file *staticdb.RepositoryFile) error {
 		repositoryFiles = append(repositoryFiles, toRepositoryFileAPI(file))

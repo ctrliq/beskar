@@ -4,7 +4,6 @@
 package orasrpm
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -188,16 +187,14 @@ func NewGenericRPMMetadata(path string, mediatype string, annotations map[string
 	}
 	defer f.Close()
 
-	checksum := sha256.New()
-
-	size, err := io.Copy(checksum, f)
+	hash, size, err := v1.SHA256(f)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GenericRPMMetadata{
 		path:        path,
-		digest:      fmt.Sprintf("%x", checksum.Sum(nil)),
+		digest:      hash.Hex,
 		mediatype:   mediatype,
 		size:        size,
 		annotations: annotations,

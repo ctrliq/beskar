@@ -161,6 +161,12 @@ func (h *Handler) deletePackageManifest(ctx context.Context, packageManifest *v1
 	packageID := packageLayer.Digest.Hex
 
 	defer func() {
+		h.syncArtifactsMutex.RLock()
+		if errCh, ok := h.syncArtifacts[packageName]; ok {
+			errCh <- errFn
+		}
+		h.syncArtifactsMutex.RUnlock()
+
 		if errFn != nil {
 			h.logger.Error("process package manifest removal", "package", packageName, "error", errFn.Error())
 			h.logDatabase(ctx, yumdb.LogError, "process package %s manifest removal: %s", packageName, errFn)

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	GoImage           = "golang:1.21.3-alpine"
+	GoImage           = "golang:1.21.4-alpine"
 	GolangCILintImage = "golangci/golangci-lint:v1.54.2-alpine"
 	HelmImage         = "alpine/helm:3.12.2"
 	ProtolintImage    = "yoheimuta/protolint:0.45.0"
@@ -80,8 +80,8 @@ func getChartsSource(client *dagger.Client) *dagger.Directory {
 func goCache(client *dagger.Client) func(dc *dagger.Container) *dagger.Container {
 	return func(dc *dagger.Container) *dagger.Container {
 		return dc.
-			WithMountedCache("/go", client.CacheVolume("go-mod-cache")).
-			WithMountedCache("/root/.cache", client.CacheVolume("go-build-cache"))
+			WithMountedCache("/go", client.CacheVolume("go-mod-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Shared}).
+			WithMountedCache("/root/.cache", client.CacheVolume("go-build-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Shared})
 	}
 }
 
