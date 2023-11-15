@@ -33,6 +33,7 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	propertiesDB, err := db.GetProperties(ctx)
 	if err != nil {
@@ -92,6 +93,7 @@ func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.Reposi
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	propertiesDB, err := db.GetProperties(ctx)
 	if err != nil {
@@ -139,6 +141,7 @@ func (h *Handler) GetRepository(ctx context.Context) (properties *apiv1.Reposito
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	propertiesDB, err := db.GetProperties(ctx)
 	if err != nil {
@@ -152,9 +155,11 @@ func (h *Handler) GetRepository(ctx context.Context) (properties *apiv1.Reposito
 		GPGKey: propertiesDB.GPGKey,
 	}
 
-	decoder := gob.NewDecoder(bytes.NewReader(propertiesDB.MirrorURLs))
-	if err := decoder.Decode(&properties.MirrorURLs); err != nil {
-		return nil, werror.Wrap(gcode.ErrInternal, err)
+	if len(propertiesDB.MirrorURLs) > 0 {
+		decoder := gob.NewDecoder(bytes.NewReader(propertiesDB.MirrorURLs))
+		if err := decoder.Decode(&properties.MirrorURLs); err != nil {
+			return nil, werror.Wrap(gcode.ErrInternal, err)
+		}
 	}
 
 	return properties, nil
@@ -203,6 +208,7 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	err = db.WalkLogs(ctx, func(log *yumdb.Log) error {
 		logs = append(logs, apiv1.RepositoryLog{
@@ -230,6 +236,7 @@ func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err e
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	pkg, err := db.GetPackage(ctx, id)
 	if err != nil {
@@ -265,6 +272,7 @@ func (h *Handler) RemoveRepositoryPackageByTag(ctx context.Context, tag string) 
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	pkg, err := db.GetPackageByTag(ctx, tag)
 	if err != nil {
@@ -298,6 +306,7 @@ func (h *Handler) GetRepositoryPackage(ctx context.Context, id string) (reposito
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	pkg, err := db.GetPackage(ctx, id)
 	if err != nil {
@@ -316,6 +325,7 @@ func (h *Handler) GetRepositoryPackageByTag(ctx context.Context, tag string) (re
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	pkg, err := db.GetPackageByTag(ctx, tag)
 	if err != nil {
@@ -334,6 +344,7 @@ func (h *Handler) ListRepositoryPackages(ctx context.Context, _ *apiv1.Page) (re
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
+	defer db.Close(false)
 
 	err = db.WalkPackages(ctx, func(pkg *yumdb.RepositoryPackage) error {
 		repositoryPackages = append(repositoryPackages, toRepositoryPackageAPI(pkg))

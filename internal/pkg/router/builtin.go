@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/distribution/distribution/v3"
 	"github.com/distribution/distribution/v3/reference"
@@ -28,25 +27,6 @@ type funcContext struct {
 	req        *http.Request
 	registry   distribution.Namespace
 	builtinErr error
-}
-
-func newBuffer() interface{} {
-	buffer := make([]byte, 8192)
-	return &buffer
-}
-
-var bufferPool = sync.Pool{
-	New: newBuffer,
-}
-
-type bufPoolCloser struct {
-	io.Reader
-	buf *[]byte
-}
-
-func (bpc bufPoolCloser) Close() error {
-	bufferPool.Put(bpc.buf)
-	return nil
 }
 
 var ociBlobDigestBuiltin = rego.Function3(
@@ -169,15 +149,14 @@ var requestBodyBuiltin = rego.FunctionDyn(
 		}()
 
 		if funcContext.req.Body != nil && funcContext.req.Body != http.NoBody {
-			buf := bufferPool.Get().(*[]byte)
+			buf := make([]byte, 8192)
 
-			n, err := io.ReadAtLeast(funcContext.req.Body, *buf, 1)
+			n, err := io.ReadAtLeast(funcContext.req.Body, buf, 1)
 			if err != nil {
 				return nil, fmt.Errorf("empty body request")
 			}
 
-			body := *buf
-			bodyReader := bytes.NewReader(body[:n])
+			bodyReader := bytes.NewReader(buf[:n])
 
 			v, err := ast.ValueFromReader(bodyReader)
 			if err != nil {
@@ -186,7 +165,7 @@ var requestBodyBuiltin = rego.FunctionDyn(
 
 			_, _ = bodyReader.Seek(0, io.SeekStart)
 
-			funcContext.req.Body = &bufPoolCloser{bodyReader, buf}
+			funcContext.req.Body = io.NopCloser(bodyReader)
 
 			return ast.NewTerm(v), nil
 		}

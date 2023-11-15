@@ -49,6 +49,7 @@ func Serve[H repository.Handler](ln net.Listener, service Service[H]) (errFn err
 	if logger == nil {
 		return fmt.Errorf("no logger found in service context")
 	}
+	slog.SetDefault(logger)
 
 	serverListener := cmux.NewListener(ln)
 

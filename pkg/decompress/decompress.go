@@ -6,7 +6,7 @@ package decompress
 import (
 	"bytes"
 	"compress/bzip2"
-	"fmt"
+	"encoding/hex"
 	"hash"
 	"io"
 	"os"
@@ -85,7 +85,7 @@ func (hb *HashBuffer) Bytes() []byte {
 }
 
 func (hb *HashBuffer) Hex() string {
-	return fmt.Sprintf("%x", hb.Sum(nil))
+	return hex.EncodeToString(hb.Sum(nil))
 }
 
 func (hb *HashBuffer) Reset() {

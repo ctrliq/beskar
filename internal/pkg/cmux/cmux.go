@@ -43,15 +43,16 @@ func (c *conn) isTLS() bool {
 
 func (c *conn) Read(p []byte) (int, error) {
 	if c.buffered {
-		if len(p) > 0 {
-			c.buffered = !c.buffered
-			p[0] = c.b[0]
-			n, err := c.Conn.Read(p[1:])
-			if err != nil {
-				return 0, err
-			}
-			return n + 1, nil
+		if len(p) == 0 {
+			return 0, io.ErrShortBuffer
 		}
+		c.buffered = !c.buffered
+		p[0] = c.b[0]
+		n, err := c.Conn.Read(p[1:])
+		if err != nil {
+			return 0, err
+		}
+		return n + 1, nil
 	} else if c.eof {
 		return 0, io.EOF
 	}
