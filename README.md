@@ -5,7 +5,7 @@ It's designed to support various artifacts and expose them through dedicated plu
 
 ### Features
 
-* Modular/Extensible via plugins
+* Modular/Extensible via [plugins](docs/plugins.md)
 * Support for YUM repositories (beskar-yum)
 * Support for static file repositories (beskar-static)
 
