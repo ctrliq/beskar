@@ -5,7 +5,6 @@ package staticrepository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -16,12 +15,34 @@ import (
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/static/api/v1"
 )
 
-func (h *Handler) DeleteRepository(_ context.Context) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	}
 
-	return werror.Wrap(gcode.ErrNotImplemented, errors.New("repository delete not supported yet"))
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	var repositoryFiles []*apiv1.RepositoryFile
+	err = db.WalkFiles(ctx, func(file *staticdb.RepositoryFile) error {
+		repositoryFiles = append(repositoryFiles, toRepositoryFileAPI(file))
+		return nil
+	})
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	// eventually soft delete all packages similarly to removeRepoPackage
+	if len(repositoryFiles) > 0 {
+		return werror.Wrap(gcode.ErrInternal, fmt.Errorf("repository %s could not be deleted because of remaining files", h.Repository))
+	}
+
+	// delete repo from mutex (use the remove in manager)
+	h.RepoHandler.Params.Remove(repository)
+
+	return nil
 }
 
 func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs []apiv1.RepositoryLog, err error) {

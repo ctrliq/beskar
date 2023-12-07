@@ -74,12 +74,52 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	return db.Sync(dbCtx)
 }
 
-func (h *Handler) DeleteRepository(_ context.Context) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	}
 
-	return werror.Wrap(gcode.ErrNotImplemented, errors.New("repository delete not supported yet"))
+	// check if there are any pkgs associated with this repo
+	repoDB, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	var repositoryPackages []*apiv1.RepositoryPackage
+	err = repoDB.WalkPackages(ctx, func(pkg *yumdb.RepositoryPackage) error {
+		repositoryPackages = append(repositoryPackages, toRepositoryPackageAPI(pkg))
+		return nil
+	})
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	// TODO: eventually soft delete all packages similarly to removeRepoPackage
+	if len(repositoryPackages) > 0 {
+		return werror.Wrap(gcode.ErrInternal, fmt.Errorf("repository %s could not be deleted because of remaining pkgs", h.Repository))
+	}
+
+	statusDB, err := h.getStatusDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	// delete repo props
+	err = statusDB.DeleteProperties(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	// delete reposync entry
+	err = statusDB.DeleteReposync(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	// delete repo from mutex (use the remove in manager)
+	h.RepoHandler.Params.Remove(repository)
+
+	return nil
 }
 
 func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.RepositoryProperties) (err error) {

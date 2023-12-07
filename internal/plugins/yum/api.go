@@ -29,7 +29,7 @@ func (p *Plugin) DeleteRepository(ctx context.Context, repository string) (err e
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
-	return p.repositoryManager.Get(ctx, repository).DeleteRepository(ctx)
+	return p.repositoryManager.Get(ctx, repository).DeleteRepository(ctx, repository)
 }
 
 func (p *Plugin) UpdateRepository(ctx context.Context, repository string, properties *apiv1.RepositoryProperties) (err error) {
