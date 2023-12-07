@@ -61,6 +61,7 @@ const (
 	beskarctlBinary    = "beskarctl"
 	beskarYUMBinary    = "beskar-yum"
 	beskarStaticBinary = "beskar-static"
+	beskarOSTreeBinary = "beskar-ostree"
 )
 
 var binaries = map[string]binaryConfig{
@@ -99,6 +100,18 @@ var binaries = map[string]binaryConfig{
 			path:          "pkg/plugins/static/api/v1",
 			filename:      "api.go",
 			interfaceName: "Static",
+		},
+		useProto:  true,
+		baseImage: "alpine:3.17",
+	},
+	beskarOSTreeBinary: {
+		configFiles: map[string]string{
+			"internal/plugins/ostree/pkg/config/default/beskar-ostree.yaml": "/etc/beskar/beskar-ostree.yaml",
+		},
+		genAPI: &genAPI{
+			path:          "pkg/plugins/ostree/api/v1",
+			filename:      "api.go",
+			interfaceName: "OSTree",
 		},
 		useProto:  true,
 		baseImage: "alpine:3.17",
@@ -143,6 +156,7 @@ func (b Build) Plugins(ctx context.Context) {
 		ctx,
 		mg.F(b.Plugin, beskarYUMBinary),
 		mg.F(b.Plugin, beskarStaticBinary),
+		mg.F(b.Plugin, beskarOSTreeBinary),
 	)
 }
 

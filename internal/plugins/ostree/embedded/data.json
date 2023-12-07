@@ -1,0 +1,27 @@
+{
+  "routes": [
+    {
+      "pattern": "^/(artifacts/ostree/[a-z0-9]+(?:[/._-][a-z0-9]+)*)/file/([a-z0-9]+(?:[/._-][a-z0-9]+)*)$",
+      "methods": [
+        "GET",
+        "HEAD"
+      ]
+    },
+    {
+      "pattern": "^/artifacts/ostree/api/v1/doc/(.*)$",
+      "body": false
+    },
+    {
+      "pattern": "^/artifacts/ostree/api/v1/(.*)$",
+      "body": true,
+      "body_key": "repository"
+    }
+  ],
+  "mediatype": {
+    "file": "application/vnd.ciq.ostree.v1.file"
+  },
+  "tags": [
+    "summary",
+    "config"
+  ]
+}
