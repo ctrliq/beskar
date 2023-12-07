@@ -41,11 +41,11 @@ type Plugin struct {
 	ctx    context.Context
 	config pluginsrv.Config
 
-	repositoryManager *repository.Manager[*yumrepository.Handler]
+	repositoryManager *repository.Manager
 	handlerParams     *repository.HandlerParams
 }
 
-var _ pluginsrv.Service[*yumrepository.Handler] = &Plugin{}
+var _ pluginsrv.Service = &Plugin{}
 
 func New(ctx context.Context, beskarYumConfig *config.BeskarYumConfig) (*Plugin, error) {
 	logger, err := beskarYumConfig.Log.Logger(log.ContextHandler)
@@ -65,7 +65,7 @@ func New(ctx context.Context, beskarYumConfig *config.BeskarYumConfig) (*Plugin,
 			Dir: filepath.Join(beskarYumConfig.DataDir, "_repohandlers_"),
 		},
 	}
-	plugin.repositoryManager = repository.NewManager[*yumrepository.Handler](
+	plugin.repositoryManager = repository.NewManager(
 		plugin.handlerParams,
 		yumrepository.NewHandler,
 	)
@@ -127,7 +127,7 @@ func (p *Plugin) Start(transport http.RoundTripper, _ *mtls.CAPEM, beskarMeta *g
 	p.config.Router.Route(
 		"/artifacts/yum/api/v1",
 		func(r chi.Router) {
-			r.Use(p.apiMiddleware)
+			r.Use(pluginsrv.IsTLSMiddleware)
 			r.Mount("/", apiv1.NewHTTPRouter(
 				p,
 				httpcodec.NewDefaultCodecs(nil),
@@ -146,15 +146,6 @@ func (p *Plugin) Context() context.Context {
 	return p.ctx
 }
 
-func (p *Plugin) RepositoryManager() *repository.Manager[*yumrepository.Handler] {
+func (p *Plugin) RepositoryManager() *repository.Manager {
 	return p.repositoryManager
-}
-
-func (p *Plugin) apiMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !pluginsrv.IsTLS(w, r) {
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }

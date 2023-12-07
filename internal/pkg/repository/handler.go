@@ -29,13 +29,26 @@ func (hp HandlerParams) Remove(repository string) {
 	hp.remove(repository)
 }
 
+// Handler - Interface for handling events for a repository.
 type Handler interface {
+	// QueueEvent - Called when a new event is received. If store is true, the event should be stored in the database.
+	// Note: Avoid performing any long-running operations in this function.
 	QueueEvent(event *eventv1.EventPayload, store bool) error
+
+	// Started - Returns true if the handler has started.
 	Started() bool
+
+	// Start - Called when the handler should start processing events.
+	// This is your chance to set up any resources, e.g., database connections, run loops, etc.
+	// This will only be called once.
 	Start(context.Context)
+
+	// Stop - Called when the handler should stop processing events and clean up resources.
 	Stop()
 }
 
+// RepoHandler - A partial default implementation of the Handler interface that provides some common functionality.
+// You can embed this in your own handler to get some default functionality, e.g., an event queue.
 type RepoHandler struct {
 	Repository string
 	Params     *HandlerParams

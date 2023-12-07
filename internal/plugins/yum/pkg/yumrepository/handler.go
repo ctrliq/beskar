@@ -52,7 +52,7 @@ type Handler struct {
 	mirrorURLs    []*url.URL
 }
 
-func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handler {
+func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) repository.Handler {
 	return &Handler{
 		RepoHandler:   repoHandler,
 		repoDir:       filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),

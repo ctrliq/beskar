@@ -41,11 +41,11 @@ type Plugin struct {
 	ctx    context.Context
 	config pluginsrv.Config
 
-	repositoryManager *repository.Manager[*staticrepository.Handler]
+	repositoryManager *repository.Manager
 	handlerParams     *repository.HandlerParams
 }
 
-var _ pluginsrv.Service[*staticrepository.Handler] = &Plugin{}
+var _ pluginsrv.Service = &Plugin{}
 
 func New(ctx context.Context, beskarStaticConfig *config.BeskarStaticConfig) (*Plugin, error) {
 	logger, err := beskarStaticConfig.Log.Logger(log.ContextHandler)
@@ -65,7 +65,7 @@ func New(ctx context.Context, beskarStaticConfig *config.BeskarStaticConfig) (*P
 			Dir: filepath.Join(beskarStaticConfig.DataDir, "_repohandlers_"),
 		},
 	}
-	plugin.repositoryManager = repository.NewManager[*staticrepository.Handler](
+	plugin.repositoryManager = repository.NewManager(
 		plugin.handlerParams,
 		staticrepository.NewHandler,
 	)
@@ -124,7 +124,7 @@ func (p *Plugin) Start(transport http.RoundTripper, _ *mtls.CAPEM, beskarMeta *g
 	p.config.Router.Route(
 		"/artifacts/static/api/v1",
 		func(r chi.Router) {
-			r.Use(p.apiMiddleware)
+			r.Use(pluginsrv.IsTLSMiddleware)
 			r.Mount("/", apiv1.NewHTTPRouter(
 				p,
 				httpcodec.NewDefaultCodecs(nil),
@@ -143,15 +143,6 @@ func (p *Plugin) Context() context.Context {
 	return p.ctx
 }
 
-func (p *Plugin) RepositoryManager() *repository.Manager[*staticrepository.Handler] {
+func (p *Plugin) RepositoryManager() *repository.Manager {
 	return p.repositoryManager
-}
-
-func (p *Plugin) apiMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !pluginsrv.IsTLS(w, r) {
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }

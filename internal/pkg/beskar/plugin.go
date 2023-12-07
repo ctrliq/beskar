@@ -97,12 +97,16 @@ func (pm *pluginManager) setClientTLSConfig(tlsConfig *tls.Config) {
 }
 
 func (pm *pluginManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// We expect the request to be of the form /artifacts/{plugin_name}/...
+	// If it is not, we return a 404.
 	matches := artifactsMatch.FindStringSubmatch(r.URL.Path)
 	if len(matches) < 2 {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
+	// Check if the plugin is registered with a name matching the second path component.
+	// If it is not, we return a 404.
 	pm.pluginsMutex.RLock()
 	pl := pm.plugins[matches[1]]
 	pm.pluginsMutex.RUnlock()
@@ -112,6 +116,7 @@ func (pm *pluginManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Forward the request to the plugin. (The in memory representation of the plugin not the plugin application itself)
 	pl.ServeHTTP(w, r)
 }
 
@@ -266,6 +271,9 @@ type plugin struct {
 func (p *plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := r.RemoteAddr
 
+	// If the request is for a repository, we need to check if the router has a decision for it.
+	// If it does, we need to redirect the request to the appropriate location.
+	// If it does not, we need to use the node hash to find the appropriate node to forward the request to.
 	result, err := p.router.Load().Decision(r, p.registry)
 	if err != nil {
 		dcontext.GetLogger(r.Context()).Errorf("%s router decision error: %s", p.name, err)
@@ -403,3 +411,7 @@ func loadPlugins(ctx context.Context) (func(), error) {
 
 	return wg.Wait, nil
 }
+
+// Mountain Team - Lead Developer
+// Fuzzball Team -
+// Innovation Group - Tech Ambassador ()
