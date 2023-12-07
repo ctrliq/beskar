@@ -248,6 +248,35 @@ func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties
 	return nil
 }
 
+func (db *StatusDB) DeleteProperties(ctx context.Context) error {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(
+		ctx,
+		"DELETE FROM properties WHERE id = 1",
+	)
+	db.Unlock()
+
+	if err != nil {
+		return err
+	}
+
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	} else if deleted != 1 {
+		return fmt.Errorf("properties not deleted in status database")
+	}
+
+	return nil
+}
+
 func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
@@ -304,6 +333,35 @@ func (db *StatusDB) UpdateReposync(ctx context.Context, reposync *Reposync) erro
 		return err
 	} else if inserted != 1 {
 		return fmt.Errorf("reposync not updated in status database")
+	}
+
+	return nil
+}
+
+func (db *StatusDB) DeleteReposync(ctx context.Context) error {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(
+		ctx,
+		"DELETE FROM reposync WHERE id = 1",
+	)
+	db.Unlock()
+
+	if err != nil {
+		return err
+	}
+
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	} else if deleted != 1 {
+		return fmt.Errorf("reposync not deleted in status database")
 	}
 
 	return nil
