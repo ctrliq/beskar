@@ -5,7 +5,7 @@ import future.keywords.in
 
 default output = {"repository": "", "redirect_url": "", "found": false}
 
-filename_checksum(filename) = checksum if {
+makeTag(filename) = checksum if {
 	filename in data.tags
 	checksum := filename
 } else = checksum {
@@ -13,7 +13,7 @@ filename_checksum(filename) = checksum if {
 }
 
 blob_url(repo, filename) = url {
-	digest := oci.blob_digest(sprintf("%s:%s", [repo, filename_checksum(filename)]), "mediatype", data.mediatype.file)
+	digest := oci.blob_digest(sprintf("%s:%s", [repo, makeTag(filename)]), "mediatype", data.mediatype.file)
     url := {
         "url": sprintf("/v2/%s/blobs/sha256:%s", [repo, digest]),
         "found": digest != "",

@@ -5,6 +5,7 @@ package static
 
 import (
 	"context"
+
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
 
 	"github.com/RussellLuo/kun/pkg/werror"

@@ -5,15 +5,16 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/distribution/distribution/v3/configuration"
-	"go.ciq.dev/beskar/internal/pkg/config"
-	"go.ciq.dev/beskar/internal/pkg/gossip"
-	"go.ciq.dev/beskar/internal/pkg/log"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/distribution/distribution/v3/configuration"
+	"go.ciq.dev/beskar/internal/pkg/config"
+	"go.ciq.dev/beskar/internal/pkg/gossip"
+	"go.ciq.dev/beskar/internal/pkg/log"
 )
 
 const (
@@ -56,7 +57,11 @@ func ParseBeskarOSTreeConfig(dir string) (*BeskarOSTreeConfig, error) {
 		configReader = strings.NewReader(defaultBeskarOSTreeConfig)
 		configDir = ""
 	} else {
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				fmt.Println(err)
+			}
+		}()
 		configReader = f
 	}
 

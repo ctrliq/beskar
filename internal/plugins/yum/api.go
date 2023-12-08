@@ -5,6 +5,7 @@ package yum
 
 import (
 	"context"
+
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumrepository"
 
 	"github.com/RussellLuo/kun/pkg/werror"
