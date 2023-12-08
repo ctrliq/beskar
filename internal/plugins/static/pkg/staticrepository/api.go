@@ -34,7 +34,11 @@ func (h *Handler) DeleteRepository(ctx context.Context, repository string, delet
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	if len(repositoryFiles) > 0 && deletePackages {
+	if len(repositoryFiles) > 0 {
+		if !deletePackages {
+			return werror.Wrap(gcode.ErrInternal, fmt.Errorf("err deleting static repository: files must be deleted from repository"))
+		}
+
 		for _, file := range repositoryFiles {
 			err = h.RemoveRepositoryFile(ctx, file.Tag)
 			if err != nil {

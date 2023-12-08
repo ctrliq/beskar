@@ -94,7 +94,11 @@ func (h *Handler) DeleteRepository(ctx context.Context, repository string, delet
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	if len(repositoryPackages) > 0 && deletePackages {
+	if len(repositoryPackages) > 0 {
+		if !deletePackages {
+			return werror.Wrap(gcode.ErrInternal, fmt.Errorf("err deleting yum repository: pkgs must be deleted from repository"))
+		}
+
 		for _, pkg := range repositoryPackages {
 			err = h.RemoveRepositoryPackageByTag(ctx, pkg.Tag)
 			if err != nil {
