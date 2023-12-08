@@ -74,7 +74,7 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	return db.Sync(dbCtx)
 }
 
-func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	}
@@ -94,9 +94,13 @@ func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err 
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	// TODO: eventually soft delete all packages similarly to removeRepoPackage
-	if len(repositoryPackages) > 0 {
-		return werror.Wrap(gcode.ErrInternal, fmt.Errorf("repository %s could not be deleted because of remaining pkgs", h.Repository))
+	if len(repositoryPackages) > 0 && deletePackages {
+		for _, pkg := range repositoryPackages {
+			err = h.RemoveRepositoryPackageByTag(ctx, pkg.Tag)
+			if err != nil {
+				return werror.Wrap(gcode.ErrInternal, err)
+			}
+		}
 	}
 
 	statusDB, err := h.getStatusDB(ctx)

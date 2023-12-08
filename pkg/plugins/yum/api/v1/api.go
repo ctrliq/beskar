@@ -89,7 +89,7 @@ type YUM interface { //nolint:interfacebloat
 	// Delete a YUM repository.
 	//kun:op DELETE /repository
 	//kun:success statusCode=200
-	DeleteRepository(ctx context.Context, repository string) (err error)
+	DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error)
 
 	// Update YUM repository properties.
 	//kun:op PUT /repository

@@ -15,7 +15,7 @@ import (
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/static/api/v1"
 )
 
-func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	}
@@ -34,9 +34,13 @@ func (h *Handler) DeleteRepository(ctx context.Context, repository string) (err 
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	// eventually soft delete all packages similarly to removeRepoPackage
-	if len(repositoryFiles) > 0 {
-		return werror.Wrap(gcode.ErrInternal, fmt.Errorf("repository %s could not be deleted because of remaining files", h.Repository))
+	if len(repositoryFiles) > 0 && deletePackages {
+		for _, file := range repositoryFiles {
+			err = h.RemoveRepositoryFile(ctx, file.Tag)
+			if err != nil {
+				return werror.Wrap(gcode.ErrInternal, err)
+			}
+		}
 	}
 
 	// delete repo from mutex (use the remove in manager)

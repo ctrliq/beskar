@@ -52,7 +52,7 @@ type Static interface {
 	// Delete a static repository.
 	//kun:op DELETE /repository
 	//kun:success statusCode=200
-	DeleteRepository(ctx context.Context, repository string) (err error)
+	DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error)
 
 	// List static repository logs.
 	//kun:op GET /repository/logs
