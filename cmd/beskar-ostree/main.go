@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"net"
+	"os"
+	"syscall"
+
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/ostree"
 	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/config"
 	"go.ciq.dev/beskar/pkg/sighandler"
 	"go.ciq.dev/beskar/pkg/version"
-	"log"
-	"net"
-	"os"
-	"syscall"
 )
 
 var configDir string
@@ -34,7 +35,11 @@ func serve(beskarOSTreeCmd *flag.FlagSet) error {
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	plugin, err := ostree.New(ctx, beskarOSTreeConfig)
 	if err != nil {
