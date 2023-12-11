@@ -36,6 +36,14 @@ type RepositoryPackage struct {
 	GPGSignature string `db:"gpg_signature"`
 }
 
+func (pkg RepositoryPackage) RPMName() string {
+	arch := pkg.Architecture
+	if pkg.SourceRPM == "" {
+		arch = "src"
+	}
+	return fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name, pkg.Version, pkg.Release, arch)
+}
+
 type RepositoryDB struct {
 	*sqlite.DB
 }
@@ -65,14 +73,8 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 		return err
 	}
 
-	arch := pkg.Architecture
-	if pkg.SourceRPM == "" {
-		arch = "src"
-	}
-
-	rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name, pkg.Version, pkg.Release, arch)
 	//nolint:gosec
-	pkg.Tag = fmt.Sprintf("%x", md5.Sum([]byte(rpmName)))
+	pkg.Tag = fmt.Sprintf("%x", md5.Sum([]byte(pkg.RPMName())))
 
 	db.Lock()
 	result, err := db.NamedExecContext(
@@ -142,10 +144,11 @@ func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryP
 
 	pkg := new(RepositoryPackage)
 
-	for rows.Next() {
-		if err := rows.StructScan(pkg); err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve package with id %s", id)
+	}
+	if err := rows.Scan(pkg); err != nil {
+		return nil, err
 	}
 
 	return pkg, nil
@@ -167,10 +170,11 @@ func (db *RepositoryDB) GetPackageByTag(ctx context.Context, tag string) (*Repos
 
 	pkg := new(RepositoryPackage)
 
-	for rows.Next() {
-		if err := rows.StructScan(pkg); err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve package with tag %s", tag)
+	}
+	if err := rows.Scan(pkg); err != nil {
+		return nil, err
 	}
 
 	return pkg, nil
@@ -225,11 +229,38 @@ func (db *RepositoryDB) HasPackageID(ctx context.Context, id string) (bool, erro
 
 	count := 0
 
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return false, err
-		}
+	if !rows.Next() {
+		return false, fmt.Errorf("no rows found in packages table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return false, err
 	}
 
 	return count > 0, nil
+}
+
+func (db *RepositoryDB) CountPackages(ctx context.Context) (int, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return 0, err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(name) FROM packages")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	count := 0
+
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in packages table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

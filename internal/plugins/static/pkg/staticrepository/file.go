@@ -27,6 +27,7 @@ func (h *Handler) processFileManifest(ctx context.Context, fileManifest *v1.Mani
 	fileName := fileLayer.Annotations[imagespec.AnnotationTitle]
 
 	defer func() {
+		h.SyncArtifactResult(fileName, errFn)
 		if errFn == nil {
 			return
 		}
@@ -63,6 +64,7 @@ func (h *Handler) deleteFileManifest(ctx context.Context, fileManifest *v1.Manif
 	fileName := fileLayer.Annotations[imagespec.AnnotationTitle]
 
 	defer func() {
+		h.SyncArtifactResult(fileName, errFn)
 		if errFn == nil {
 			return
 		}
@@ -72,7 +74,7 @@ func (h *Handler) deleteFileManifest(ctx context.Context, fileManifest *v1.Manif
 
 	err = h.removeFileFromRepositoryDatabase(ctx, fileName)
 	if err != nil {
-		return fmt.Errorf("while removing package %s from metadata database: %w", fileName, err)
+		return fmt.Errorf("while removing file %s from metadata database: %w", fileName, err)
 	}
 
 	return nil

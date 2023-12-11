@@ -52,12 +52,12 @@ func New(ctx context.Context, name string, storage Storage) (*DB, error) {
 func (db *DB) migrate() error {
 	migrations, err := schema.FSMigrations(db.storage.SchemaFS, db.storage.SchemaGlob)
 	if err != nil {
-		return fmt.Errorf("while setting %s DB migration: %w", db.name, err)
+		return fmt.Errorf("while setting %s database migration: %w", db.name, err)
 	}
 
 	migrator := schema.NewMigrator(schema.WithDialect(schema.SQLite))
 	if err := migrator.Apply(db.DB, migrations); err != nil {
-		return fmt.Errorf("while applying %s DB migration: %w", db.name, err)
+		return fmt.Errorf("while applying %s database migration: %w", db.name, err)
 	}
 
 	return nil
@@ -85,7 +85,7 @@ func (db *DB) Open(ctx context.Context) error {
 			defer remoteReader.Close()
 
 			if err := pull(db.path, remoteReader); err != nil {
-				return fmt.Errorf("while pulling log DB: %w", err)
+				return fmt.Errorf("while pulling %s database: %w", db.name, err)
 			}
 		}
 	} else if err != nil {
@@ -94,7 +94,7 @@ func (db *DB) Open(ctx context.Context) error {
 
 	db.DB, err = sqlx.Open("sqlite", db.path)
 	if err != nil {
-		return fmt.Errorf("while opening log DB %s: %w", db.path, err)
+		return fmt.Errorf("while opening %s database %s: %w", db.name, db.path, err)
 	}
 	db.SetMaxOpenConns(1)
 
@@ -110,7 +110,7 @@ func (db *DB) Sync(ctx context.Context) error {
 
 	remoteWriter, err := db.storage.Bucket.NewWriter(ctx, key, &blob.WriterOptions{})
 	if err != nil {
-		return fmt.Errorf("while initializing s3 object writer: %w", err)
+		return fmt.Errorf("while initializing object writer: %w", err)
 	}
 
 	db.Lock()
@@ -118,25 +118,38 @@ func (db *DB) Sync(ctx context.Context) error {
 
 	if err := push(db.path, remoteWriter); err != nil {
 		_ = remoteWriter.Close()
-		return fmt.Errorf("while pushing log database to s3 bucket: %w", err)
+		return fmt.Errorf("while pushing %s database to storage bucket: %w", db.name, err)
 	}
 
 	return remoteWriter.Close()
 }
 
-func (db *DB) Close(removeDB bool) error {
+func (db *DB) Close(removeLocalDB bool) error {
 	db.Lock()
 	defer db.Unlock()
 
 	if db.DB != nil && db.Reference.Load() == 0 {
 		err := db.DB.Close()
 		db.DB = nil
-		if removeDB {
+		if removeLocalDB {
 			if removeErr := os.Remove(db.path); removeErr != nil && err == nil {
 				err = removeErr
 			}
 		}
 		return err
+	}
+
+	return nil
+}
+
+func (db *DB) Delete(ctx context.Context) error {
+	db.Lock()
+	defer db.Unlock()
+
+	key := filepath.Join(db.storage.Repository, db.storage.CompressedFilename)
+
+	if err := db.storage.Bucket.Delete(ctx, key); err != nil {
+		return fmt.Errorf("while deleting %s database on object storage: %w", db.name, err)
 	}
 
 	return nil
