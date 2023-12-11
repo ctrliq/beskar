@@ -120,10 +120,11 @@ func (db *RepositoryDB) GetFileByTag(ctx context.Context, tag string) (*Reposito
 
 	file := new(RepositoryFile)
 
-	for rows.Next() {
-		if err := rows.StructScan(file); err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve file with tag %s", tag)
+	}
+	if err := rows.Scan(file); err != nil {
+		return nil, err
 	}
 
 	return file, nil
@@ -145,10 +146,11 @@ func (db *RepositoryDB) GetFileByName(ctx context.Context, name string) (*Reposi
 
 	file := new(RepositoryFile)
 
-	for rows.Next() {
-		if err := rows.StructScan(file); err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve file %s", name)
+	}
+	if err := rows.Scan(file); err != nil {
+		return nil, err
 	}
 
 	return file, nil
@@ -185,4 +187,30 @@ func (db *RepositoryDB) WalkFiles(ctx context.Context, walkFn WalkFileFunc) erro
 	}
 
 	return nil
+}
+
+func (db *RepositoryDB) CountFiles(ctx context.Context) (int, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return 0, err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(tag) FROM files")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	count := 0
+
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in files table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

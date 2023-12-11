@@ -12,8 +12,8 @@ import (
 )
 
 type DeleteRepositoryRequest struct {
-	Repository string `json:"repository"`
-	DeletePackages bool `json:"deletePackages"`
+	Repository  string `json:"repository"`
+	DeleteFiles bool   `json:"delete_files"`
 }
 
 // ValidateDeleteRepositoryRequest creates a validator for DeleteRepositoryRequest.
@@ -40,7 +40,7 @@ func MakeEndpointOfDeleteRepository(s Static) endpoint.Endpoint {
 		err := s.DeleteRepository(
 			ctx,
 			req.Repository,
-			req.DeletePackages,
+			req.DeleteFiles,
 		)
 		return &DeleteRepositoryResponse{
 			Err: err,

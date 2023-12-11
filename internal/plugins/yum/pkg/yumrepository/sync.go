@@ -5,7 +5,6 @@ package yumrepository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RussellLuo/kun/pkg/werror"
-	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/hashicorp/go-multierror"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -31,6 +28,8 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 	reposync := h.updateSyncing(true)
 
 	defer func() {
+		h.SyncArtifactReset()
+
 		reposync = h.updateSyncing(false)
 
 		if errFn != nil {
@@ -45,12 +44,6 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 				h.logger.Error("reposync database update failed", "error", err.Error())
 			}
 		}
-		h.syncArtifactsMutex.Lock()
-		for k, v := range h.syncArtifacts {
-			delete(h.syncArtifacts, k)
-			close(v)
-		}
-		h.syncArtifactsMutex.Unlock()
 	}()
 
 	if err := h.updateReposyncDatabase(dbCtx, reposync); err != nil {
@@ -171,51 +164,31 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 				packageMutex.Unlock()
 			}
 
-			errCh := make(chan error, 1)
-
-			h.syncArtifactsMutex.Lock()
-			h.syncArtifacts[rpmName] = errCh
-			h.syncArtifactsMutex.Unlock()
+			errCh, waitSync := h.SyncArtifact(ctx, rpmName, time.Minute)
 
 			if err := oras.Push(pusher, h.Params.RemoteOptions...); err != nil {
 				h.logger.Error("package push", "package", path, "error", err.Error())
 				errCh <- fmt.Errorf("package %s push: %w", path, err)
 			}
 
-			pkgCtx, cancel := context.WithTimeout(ctx, time.Minute)
-
-			var pkgErr error
-
-			select {
-			case <-pkgCtx.Done():
-				if errors.Is(pkgCtx.Err(), context.Canceled) {
-					pkgErr = fmt.Errorf("package %s processing timeout", path)
-				} else {
-					pkgErr = fmt.Errorf("package %s processing interrupted", path)
-				}
-			case pkgErr = <-errCh:
-				if pkgErr == nil {
-					packageMutex.Lock()
-					syncedPackages++
-					reposync, err := h.addSyncedPackageReposyncDatabase(dbCtx, syncedPackages, totalPackages)
-					if err != nil {
-						h.logger.Error("reposync status update", "package", path, "error", err.Error())
-						h.logDatabase(dbCtx, yumdb.LogError, "reposync status update for %s: %s", path, err)
-					} else {
-						h.setReposync(reposync)
-					}
-					packageMutex.Unlock()
-				}
+			if err := waitSync(); err != nil {
+				return fmt.Errorf("package %s processing error: %w", path, err)
 			}
 
-			h.syncArtifactsMutex.Lock()
-			close(errCh)
-			delete(h.syncArtifacts, rpmName)
-			h.syncArtifactsMutex.Unlock()
+			packageMutex.Lock()
 
-			cancel()
+			syncedPackages++
+			reposync, err := h.addSyncedPackageReposyncDatabase(dbCtx, syncedPackages, totalPackages)
+			if err != nil {
+				h.logger.Error("reposync status update", "package", path, "error", err.Error())
+				h.logDatabase(dbCtx, yumdb.LogError, "reposync status update for %s: %s", path, err)
+			} else {
+				h.setReposync(reposync)
+			}
 
-			return pkgErr
+			packageMutex.Unlock()
+
+			return nil
 		})
 	}
 
@@ -246,53 +219,29 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 				return fmt.Errorf("package id %s database: %w", pkgID, err)
 			}
 
-			arch := pkg.Architecture
-			if pkg.SourceRPM == "" {
-				arch = "src"
-			}
-			rpmName := fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name, pkg.Version, pkg.Release, arch)
+			rpmName := pkg.RPMName()
 
 			tagRef := filepath.Join(h.Repository, "packages:"+pkg.Tag)
 
 			digest, err := h.GetManifestDigest(tagRef)
 			if err != nil {
-				return werror.Wrap(gcode.ErrInternal, err)
+				return fmt.Errorf("package %s manifest digest: %w", tagRef, err)
 			}
 
 			digestRef := filepath.Join(h.Repository, "packages@"+digest)
 
-			errCh := make(chan error, 1)
-
-			h.syncArtifactsMutex.Lock()
-			h.syncArtifacts[rpmName] = errCh
-			h.syncArtifactsMutex.Unlock()
+			errCh, waitSync := h.SyncArtifact(ctx, rpmName, time.Minute)
 
 			if err := h.DeleteManifest(digestRef); err != nil {
-				return werror.Wrap(gcode.ErrInternal, err)
+				h.logger.Error("package delete", "name", rpmName, "error", err.Error())
+				errCh <- fmt.Errorf("package delete: %w", err)
 			}
 
-			pkgCtx, cancel := context.WithTimeout(ctx, time.Minute)
-
-			var pkgErr error
-
-			select {
-			case <-pkgCtx.Done():
-				if errors.Is(pkgCtx.Err(), context.Canceled) {
-					pkgErr = fmt.Errorf("package %s removal processing timeout", rpmName)
-				} else {
-					pkgErr = fmt.Errorf("package %s removal processing interrupted", rpmName)
-				}
-			case pkgErr = <-errCh:
+			if err := waitSync(); err != nil {
+				return fmt.Errorf("package %s removal processing error: %w", rpmName, err)
 			}
 
-			h.syncArtifactsMutex.Lock()
-			close(errCh)
-			delete(h.syncArtifacts, rpmName)
-			h.syncArtifactsMutex.Unlock()
-
-			cancel()
-
-			return pkgErr
+			return nil
 		})
 	}
 

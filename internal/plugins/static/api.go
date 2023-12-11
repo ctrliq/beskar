@@ -18,11 +18,11 @@ func checkRepository(repository string) error {
 	return nil
 }
 
-func (p *Plugin) DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error) {
+func (p *Plugin) DeleteRepository(ctx context.Context, repository string, deleteFiles bool) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
-	return p.repositoryManager.Get(ctx, repository).DeleteRepository(ctx, repository, deletePackages)
+	return p.repositoryManager.Get(ctx, repository).DeleteRepository(ctx, deleteFiles)
 }
 
 func (p *Plugin) ListRepositoryLogs(ctx context.Context, repository string, page *apiv1.Page) (logs []apiv1.RepositoryLog, err error) {

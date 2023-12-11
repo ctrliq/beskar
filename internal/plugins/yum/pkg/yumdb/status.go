@@ -167,7 +167,7 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 	return nil
 }
 
-func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
+func (db *StatusDB) CountEvents(ctx context.Context) (int, error) {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
 
@@ -175,7 +175,7 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	rows, err := db.QueryxContext(ctx, "SELECT COUNT(id) as id FROM events")
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(id) FROM events")
 	if err != nil {
 		return 0, err
 	}
@@ -183,10 +183,11 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 
 	count := 0
 
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in events table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
 	}
 
 	return count, nil
@@ -208,11 +209,11 @@ func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 
 	properties := new(Properties)
 
-	for rows.Next() {
-		err := rows.StructScan(properties)
-		if err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve repository properties")
+	}
+	if err := rows.Scan(properties); err != nil {
+		return nil, err
 	}
 
 	return properties, nil
@@ -248,7 +249,7 @@ func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties
 	return nil
 }
 
-func (db *StatusDB) DeleteProperties(ctx context.Context) error {
+func (db *StatusDB) SetCreatedProperty(ctx context.Context) error {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
 
@@ -259,7 +260,7 @@ func (db *StatusDB) DeleteProperties(ctx context.Context) error {
 	db.Lock()
 	result, err := db.ExecContext(
 		ctx,
-		"DELETE FROM properties WHERE id = 1",
+		"UPDATE properties SET created = true WHERE id = 1",
 	)
 	db.Unlock()
 
@@ -267,11 +268,11 @@ func (db *StatusDB) DeleteProperties(ctx context.Context) error {
 		return err
 	}
 
-	deleted, err := result.RowsAffected()
+	inserted, err := result.RowsAffected()
 	if err != nil {
 		return err
-	} else if deleted != 1 {
-		return fmt.Errorf("properties not deleted in status database")
+	} else if inserted != 1 {
+		return fmt.Errorf("properties not updated in status database")
 	}
 
 	return nil
@@ -296,11 +297,11 @@ func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 
 	reposync := new(Reposync)
 
-	for rows.Next() {
-		err := rows.StructScan(reposync)
-		if err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve reposync data")
+	}
+	if err := rows.Scan(reposync); err != nil {
+		return nil, err
 	}
 
 	return reposync, nil
@@ -333,35 +334,6 @@ func (db *StatusDB) UpdateReposync(ctx context.Context, reposync *Reposync) erro
 		return err
 	} else if inserted != 1 {
 		return fmt.Errorf("reposync not updated in status database")
-	}
-
-	return nil
-}
-
-func (db *StatusDB) DeleteReposync(ctx context.Context) error {
-	db.Reference.Add(1)
-	defer db.Reference.Add(-1)
-
-	if err := db.Open(ctx); err != nil {
-		return err
-	}
-
-	db.Lock()
-	result, err := db.ExecContext(
-		ctx,
-		"DELETE FROM reposync WHERE id = 1",
-	)
-	db.Unlock()
-
-	if err != nil {
-		return err
-	}
-
-	deleted, err := result.RowsAffected()
-	if err != nil {
-		return err
-	} else if deleted != 1 {
-		return fmt.Errorf("reposync not deleted in status database")
 	}
 
 	return nil

@@ -49,8 +49,8 @@ func MakeEndpointOfCreateRepository(s YUM) endpoint.Endpoint {
 }
 
 type DeleteRepositoryRequest struct {
-	Repository string `json:"repository"`
-	DeletePackages bool `json:"deletePackages"`
+	Repository     string `json:"repository"`
+	DeletePackages bool   `json:"delete_packages"`
 }
 
 // ValidateDeleteRepositoryRequest creates a validator for DeleteRepositoryRequest.

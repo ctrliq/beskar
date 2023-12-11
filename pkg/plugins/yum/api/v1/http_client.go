@@ -94,10 +94,10 @@ func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string, de
 	}
 
 	reqBody := struct {
-		Repository string `json:"repository"`
-		DeletePackages bool `json:"deletePackages"`
+		Repository     string `json:"repository"`
+		DeletePackages bool   `json:"delete_packages"`
 	}{
-		Repository: repository,
+		Repository:     repository,
 		DeletePackages: deletePackages,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)

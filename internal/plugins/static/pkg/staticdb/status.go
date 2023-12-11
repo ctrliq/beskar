@@ -151,7 +151,7 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 	return nil
 }
 
-func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
+func (db *StatusDB) CountEvents(ctx context.Context) (int, error) {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
 
@@ -167,10 +167,11 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 
 	count := 0
 
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in events table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
 	}
 
 	return count, nil

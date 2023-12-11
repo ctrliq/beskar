@@ -14,8 +14,11 @@ import (
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/hashicorp/go-multierror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/yum/api/v1"
+	"golang.org/x/sync/semaphore"
 )
 
 var dbCtx = context.Background()
@@ -74,9 +77,36 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	return db.Sync(dbCtx)
 }
 
-func (h *Handler) DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, deletePackages bool) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if h.syncing.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is running"))
+	} else if h.delete.Swap(true) {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	}
+	defer func() {
+		h.SyncArtifactReset()
+
+		if err == nil {
+			// stop the repo handler and trigger cleanup
+			h.Stop()
+		} else {
+			h.delete.Store(false)
+		}
+	}()
+
+	db, err := h.getStatusDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	propertiesDB, err := db.GetProperties(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	} else if !propertiesDB.Created {
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository %s not found", h.Repository))
 	}
 
 	// check if there are any pkgs associated with this repo
@@ -85,47 +115,69 @@ func (h *Handler) DeleteRepository(ctx context.Context, repository string, delet
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	var repositoryPackages []*apiv1.RepositoryPackage
-	err = repoDB.WalkPackages(ctx, func(pkg *yumdb.RepositoryPackage) error {
-		repositoryPackages = append(repositoryPackages, toRepositoryPackageAPI(pkg))
+	if !deletePackages {
+		count, err := repoDB.CountPackages(ctx)
+		if err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		} else if count > 0 {
+			return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("repository %s has %d packages associated with it", h.Repository, count))
+		}
+	} else {
+		deletePackage := new(multierror.Group)
+		// maximum parallel package deletion
+		sem := semaphore.NewWeighted(100)
+
+		// delete all packages associated with this repo
+		err = repoDB.WalkPackages(ctx, func(pkg *yumdb.RepositoryPackage) error {
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return err
+			}
+			deletePackage.Go(func() error {
+				defer sem.Release(1)
+				return h.removePackageFromBeskar(ctx, pkg)
+			})
+			return nil
+		})
+		if err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		} else if err := deletePackage.Wait().ErrorOrNil(); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	// delete all metadata associated with this repo
+	metaDB, err := h.getMetadataDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	deleteMetadata := new(multierror.Group)
+
+	deleteMetadata.Go(func() error {
+		// nil meta means repomd.xml
+		if err := h.removeMetadataFromBeskar(ctx, nil); err != nil {
+			// repomd.xml was not found, it could be because
+			// no packages have been uploaded yet, it's fine
+			// to ignore it
+			var transportErr *transport.Error
+			if errors.As(err, &transportErr) && transportErr.StatusCode == 404 {
+				return nil
+			}
+		}
+		return nil
+	})
+
+	err = metaDB.WalkExtraMetadata(ctx, func(meta *yumdb.ExtraMetadata) error {
+		deleteMetadata.Go(func() error {
+			return h.removeMetadataFromBeskar(ctx, meta)
+		})
 		return nil
 	})
 	if err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	if len(repositoryPackages) > 0 {
-		if !deletePackages {
-			return werror.Wrap(gcode.ErrInternal, fmt.Errorf("err deleting yum repository: pkgs must be deleted from repository"))
-		}
-
-		for _, pkg := range repositoryPackages {
-			err = h.RemoveRepositoryPackageByTag(ctx, pkg.Tag)
-			if err != nil {
-				return werror.Wrap(gcode.ErrInternal, err)
-			}
-		}
-	}
-
-	statusDB, err := h.getStatusDB(ctx)
-	if err != nil {
+	} else if err := deleteMetadata.Wait().ErrorOrNil(); err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
-
-	// delete repo props
-	err = statusDB.DeleteProperties(ctx)
-	if err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	// delete reposync entry
-	err = statusDB.DeleteReposync(ctx)
-	if err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	// delete repo from mutex (use the remove in manager)
-	h.RepoHandler.Params.Remove(repository)
 
 	return nil
 }
@@ -135,6 +187,8 @@ func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.Reposi
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if properties == nil {
 		return werror.Wrap(gcode.ErrInvalidArgument, fmt.Errorf("properties can't be nil"))
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	}
 
 	db, err := h.getStatusDB(ctx)
@@ -220,9 +274,9 @@ func (h *Handler) SyncRepository(context.Context) (err error) {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
 	} else if len(h.getMirrorURLs()) == 0 {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror URLs setup"))
-	}
-
-	if h.syncing.Swap(true) {
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	} else if h.syncing.Swap(true) {
 		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
 	}
 
@@ -273,11 +327,73 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 	return logs, nil
 }
 
+func (h *Handler) removeMetadataFromBeskar(ctx context.Context, meta *yumdb.ExtraMetadata) error {
+	tag := RepomdXMLTag
+	if meta != nil {
+		tag = meta.Type
+	}
+
+	tagRef := filepath.Join(h.Repository, "repodata:"+tag)
+
+	digest, err := h.GetManifestDigest(tagRef)
+	if err != nil {
+		return err
+	}
+	digestRef := filepath.Join(h.Repository, "repodata@"+digest)
+
+	if meta != nil {
+		fileName := meta.Filename
+
+		errCh, waitSync := h.SyncArtifact(ctx, fileName, time.Minute)
+
+		if err := h.DeleteManifest(digestRef); err != nil {
+			errCh <- err
+		}
+
+		if err := waitSync(); err != nil {
+			return fmt.Errorf("metadata %s removal processing error: %w", tag, err)
+		}
+	} else {
+		if err := h.DeleteManifest(digestRef); err != nil {
+			return fmt.Errorf("metadata %s removal processing error: %w", tag, err)
+		}
+	}
+
+	return nil
+}
+
+func (h *Handler) removePackageFromBeskar(ctx context.Context, pkg *yumdb.RepositoryPackage) error {
+	tagRef := filepath.Join(h.Repository, "packages:"+pkg.Tag)
+
+	digest, err := h.GetManifestDigest(tagRef)
+	if err != nil {
+		return err
+	}
+
+	rpmName := pkg.RPMName()
+
+	errCh, waitSync := h.SyncArtifact(ctx, rpmName, time.Minute)
+
+	digestRef := filepath.Join(h.Repository, "packages@"+digest)
+
+	if err := h.DeleteManifest(digestRef); err != nil {
+		errCh <- err
+	}
+
+	if err := waitSync(); err != nil {
+		return fmt.Errorf("package %s removal processing error: %w", rpmName, err)
+	}
+
+	return nil
+}
+
 func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if h.getMirror() {
 		return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("could not delete package for mirror repository"))
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	}
 
 	db, err := h.getRepositoryDB(ctx)
@@ -293,16 +409,7 @@ func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err e
 		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with ID %s not found", id))
 	}
 
-	tagRef := filepath.Join(h.Repository, "packages:"+pkg.Tag)
-
-	digest, err := h.GetManifestDigest(tagRef)
-	if err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	digestRef := filepath.Join(h.Repository, "packages@"+digest)
-
-	if err := h.DeleteManifest(digestRef); err != nil {
+	if err := h.removePackageFromBeskar(ctx, pkg); err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
@@ -314,6 +421,8 @@ func (h *Handler) RemoveRepositoryPackageByTag(ctx context.Context, tag string) 
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if h.getMirror() {
 		return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("could not delete package for mirror repository"))
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	}
 
 	db, err := h.getRepositoryDB(ctx)
@@ -329,16 +438,7 @@ func (h *Handler) RemoveRepositoryPackageByTag(ctx context.Context, tag string) 
 		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with tag %s not found", tag))
 	}
 
-	tagRef := filepath.Join(h.Repository, "packages:"+tag)
-
-	digest, err := h.GetManifestDigest(tagRef)
-	if err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	digestRef := filepath.Join(h.Repository, "packages@"+digest)
-
-	if err := h.DeleteManifest(digestRef); err != nil {
+	if err := h.removePackageFromBeskar(ctx, pkg); err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
