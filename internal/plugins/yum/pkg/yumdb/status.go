@@ -212,7 +212,7 @@ func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve repository properties")
 	}
-	if err := rows.Scan(properties); err != nil {
+	if err := rows.StructScan(properties); err != nil {
 		return nil, err
 	}
 
@@ -300,7 +300,7 @@ func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve reposync data")
 	}
-	if err := rows.Scan(reposync); err != nil {
+	if err := rows.StructScan(reposync); err != nil {
 		return nil, err
 	}
 

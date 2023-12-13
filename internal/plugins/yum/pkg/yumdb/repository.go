@@ -147,7 +147,7 @@ func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryP
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve package with id %s", id)
 	}
-	if err := rows.Scan(pkg); err != nil {
+	if err := rows.StructScan(pkg); err != nil {
 		return nil, err
 	}
 
@@ -173,7 +173,7 @@ func (db *RepositoryDB) GetPackageByTag(ctx context.Context, tag string) (*Repos
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve package with tag %s", tag)
 	}
-	if err := rows.Scan(pkg); err != nil {
+	if err := rows.StructScan(pkg); err != nil {
 		return nil, err
 	}
 
