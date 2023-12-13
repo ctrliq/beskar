@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,15 +20,14 @@ import (
 	"time"
 
 	"github.com/distribution/distribution/v3"
-	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/registry"
 	"github.com/distribution/distribution/v3/registry/auth"
-	"github.com/distribution/distribution/v3/version"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/memberlist"
 	"github.com/mailgun/groupcache/v2"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 	"go.ciq.dev/beskar/internal/pkg/cache"
 	"go.ciq.dev/beskar/internal/pkg/cmux"
 	"go.ciq.dev/beskar/internal/pkg/config"
@@ -35,6 +36,9 @@ import (
 	"go.ciq.dev/beskar/pkg/mtls"
 	"go.ciq.dev/beskar/pkg/netutil"
 	"go.ciq.dev/beskar/pkg/sighandler"
+	"go.ciq.dev/beskar/pkg/version"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	// load distribution filesystem storage driver
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
@@ -46,6 +50,8 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/gcs"
 )
 
+var serverPluginContextKey int
+
 type Registry struct {
 	registry       distribution.Namespace
 	beskarConfig   *config.BeskarConfig
@@ -55,7 +61,7 @@ type Registry struct {
 	manifestCache  *cache.GroupCache
 	pluginManager  *pluginManager
 	errCh          chan error
-	logger         dcontext.Logger
+	logger         *logrus.Entry
 	wait           sighandler.WaitFunc
 	hashedHostname string
 }
@@ -69,15 +75,16 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	ctx, waitFunc := sighandler.New(beskarRegistry.errCh, syscall.SIGINT)
 	beskarRegistry.wait = waitFunc
 
-	ctx = dcontext.WithVersion(ctx, version.Version)
-
 	beskarRegistry.router = mux.NewRouter()
+	beskarRegistry.logger = logrus.StandardLogger().WithField("version", version.Semver).WithField("service", "beskar")
+
 	// for probes
 	beskarRegistry.router.Handle("/", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
 	err := registerRegistryMiddleware(beskarRegistry, func(registry distribution.Namespace) *pluginManager {
 		beskarRegistry.registry = registry
-		beskarRegistry.pluginManager = newPluginManager(registry, beskarRegistry.router)
+		beskarRegistry.pluginManager = newPluginManager(registry, beskarRegistry.logger)
+		beskarRegistry.router.PathPrefix(artifactsPath).Handler(beskarRegistry.pluginManager)
 		return beskarRegistry.pluginManager
 	})
 	if err != nil {
@@ -85,7 +92,8 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	}
 
 	//nolint:gosec
-	beskarRegistry.hashedHostname = fmt.Sprintf("%x", md5.Sum([]byte(beskarConfig.Hostname)))
+	s := md5.Sum([]byte(beskarConfig.Hostname))
+	beskarRegistry.hashedHostname = hex.EncodeToString(s[:])
 
 	if err := auth.Register("beskar", newAccessController(beskarRegistry.hashedHostname)); err != nil {
 		return nil, nil, err
@@ -95,6 +103,9 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// TODO: allow to enable/disable tracing
+	otel.SetTracerProvider(noop.NewTracerProvider())
 
 	reflectServer := reflect.ValueOf(registryServer).Elem().FieldByName("server")
 	if reflectServer.IsZero() || reflectServer.IsNil() {
@@ -107,7 +118,6 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	}
 
 	beskarRegistry.server = server
-	beskarRegistry.logger = dcontext.GetLogger(ctx)
 
 	if beskarConfig.Profiling {
 		beskarRegistry.setProfiling()
@@ -355,14 +365,14 @@ func (br *Registry) initManifestCache(caPEM *mtls.CAPEM) (_ *groupcache.Group, e
 func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 	br.logger.Info("Starting beskar server")
 
-	tlsConfig, err := br.getTLSConfig(ctx)
+	tlsConfig, err := br.getTLSConfig(br.logger)
 	if err != nil {
 		return err
 	} else if tlsConfig != nil {
-		dcontext.GetLogger(ctx).Infof("listening on %v, tls", ln.Addr())
+		br.logger.Infof("listening on %v, tls", ln.Addr())
 		ln = tls.NewListener(ln, tlsConfig)
 	} else {
-		dcontext.GetLogger(ctx).Infof("listening on %v", ln.Addr())
+		br.logger.Infof("listening on %v", ln.Addr())
 		ln = cmux.NewListener(ln)
 	}
 
@@ -394,12 +404,28 @@ func (br *Registry) Serve(ctx context.Context, ln net.Listener) (errFn error) {
 		return fmt.Errorf("while generating plugin client mTLS certificates: %w", err)
 	}
 
+	leaf := pluginClientConfig.Certificates[0].Leaf
+	if leaf == nil {
+		leaf, err = x509.ParseCertificate(pluginClientConfig.Certificates[0].Certificate[0])
+		if err != nil {
+			return fmt.Errorf("while parsing plugin client mTLS certificate: %w", err)
+		}
+	}
+
 	br.pluginManager.setClientTLSConfig(pluginClientConfig)
 
 	manifestCache := &manifestCache{}
 
 	br.router.NotFoundHandler = br.server.Handler
-	br.server.Handler = br.router
+
+	br.server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+			if bytes.Equal(leaf.AuthorityKeyId, r.TLS.PeerCertificates[0].AuthorityKeyId) {
+				r = r.WithContext(context.WithValue(r.Context(), &serverPluginContextKey, true))
+			}
+		}
+		br.router.ServeHTTP(w, r)
+	})
 
 	br.server.BaseContext = func(net.Listener) context.Context {
 		return context.WithValue(ctx, &manifestCacheKey, manifestCache)
@@ -492,11 +518,9 @@ func (br *Registry) sendEvent(ctx context.Context, event *eventv1.EventPayload) 
 
 		event.Origin = eventv1.Origin_ORIGIN_EXTERNAL
 
-		// plugins are using mTLS and uses hashed hostname as SNI
-		req, err := dcontext.GetRequest(ctx)
-		if err != nil {
-			return err
-		} else if req.TLS != nil && req.TLS.ServerName == br.hashedHostname {
+		// plugins connections are identified within server ConnContext
+		isPlugin, ok := ctx.Value(&serverPluginContextKey).(bool)
+		if ok && isPlugin {
 			event.Origin = eventv1.Origin_ORIGIN_PLUGIN
 		}
 

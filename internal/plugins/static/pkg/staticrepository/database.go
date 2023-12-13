@@ -6,6 +6,7 @@ package staticrepository
 import (
 	"context"
 	"crypto/md5" //nolint:gosec
+	"encoding/hex"
 	"fmt"
 
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticdb"
@@ -51,7 +52,8 @@ func (h *Handler) removeFileFromRepositoryDatabase(ctx context.Context, name str
 	defer db.Close(false)
 
 	//nolint:gosec
-	tag := fmt.Sprintf("%x", md5.Sum([]byte(name)))
+	s := md5.Sum([]byte(name))
+	tag := hex.EncodeToString(s[:])
 
 	deleted, err := db.RemoveFile(ctx, tag)
 	if err != nil {

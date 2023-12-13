@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"embed"
+	"encoding/hex"
 	"fmt"
 
 	"go.ciq.dev/beskar/internal/pkg/sqlite"
@@ -74,7 +75,8 @@ func (db *RepositoryDB) AddPackage(ctx context.Context, pkg *RepositoryPackage) 
 	}
 
 	//nolint:gosec
-	pkg.Tag = fmt.Sprintf("%x", md5.Sum([]byte(pkg.RPMName())))
+	s := md5.Sum([]byte(pkg.RPMName()))
+	pkg.Tag = hex.EncodeToString(s[:])
 
 	db.Lock()
 	result, err := db.NamedExecContext(
@@ -145,7 +147,7 @@ func (db *RepositoryDB) GetPackage(ctx context.Context, id string) (*RepositoryP
 	pkg := new(RepositoryPackage)
 
 	if !rows.Next() {
-		return nil, fmt.Errorf("failed to retrieve package with id %s", id)
+		return nil, sqlite.ErrNoEntryFound
 	}
 	if err := rows.StructScan(pkg); err != nil {
 		return nil, err
@@ -171,7 +173,7 @@ func (db *RepositoryDB) GetPackageByTag(ctx context.Context, tag string) (*Repos
 	pkg := new(RepositoryPackage)
 
 	if !rows.Next() {
-		return nil, fmt.Errorf("failed to retrieve package with tag %s", tag)
+		return nil, sqlite.ErrNoEntryFound
 	}
 	if err := rows.StructScan(pkg); err != nil {
 		return nil, err

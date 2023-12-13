@@ -39,7 +39,7 @@ type Handler struct {
 	statusDB     *yumdb.StatusDB
 	logDB        *yumdb.LogDB
 
-	syncCh   chan struct{}
+	syncCh   chan chan error
 	reposync atomic.Pointer[yumdb.Reposync]
 	syncing  atomic.Bool
 
@@ -57,7 +57,7 @@ func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handl
 		RepoHandler: repoHandler,
 		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
 		logger:      logger,
-		syncCh:      make(chan struct{}, 1),
+		syncCh:      make(chan chan error, 1),
 	}
 }
 
@@ -162,6 +162,8 @@ func (h *Handler) getLogDB(ctx context.Context) (*yumdb.LogDB, error) {
 }
 
 func (h *Handler) cleanup() {
+	h.logger.Debug("repository cleanup", "repository", h.Repository)
+
 	h.dbMutex.Lock()
 
 	if h.logDB != nil {
@@ -420,13 +422,19 @@ func (h *Handler) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				h.Stopped.Store(true)
-			case <-h.syncCh:
-				go func() {
-					err := h.repositorySync(ctx)
-					if err != nil {
-						h.logger.Error("reposistory sync", "error", err.Error())
-					}
-				}()
+			case waitErrCh, more := <-h.syncCh:
+				if more {
+					go func() {
+						err := h.repositorySync(ctx)
+						if err != nil {
+							h.logger.Error("reposistory sync", "error", err.Error())
+						}
+						if waitErrCh != nil {
+							waitErrCh <- err
+							close(waitErrCh)
+						}
+					}()
+				}
 			case <-h.Queued:
 				events := h.DequeueEvents()
 
@@ -442,7 +450,9 @@ func (h *Handler) Start(ctx context.Context) {
 				// all remaining events in database have been processed
 				// start the repository sync
 				if lastIndex != nil && events[len(events)-1].Digest == lastIndex.Digest {
-					h.syncCh <- struct{}{}
+					// false means that the sync operation won't wait for the
+					// sync to complete
+					h.syncCh <- nil
 					lastIndex = nil
 				}
 

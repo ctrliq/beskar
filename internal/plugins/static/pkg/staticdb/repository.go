@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"embed"
+	"encoding/hex"
 	"fmt"
 
 	"go.ciq.dev/beskar/internal/pkg/sqlite"
@@ -54,7 +55,8 @@ func (db *RepositoryDB) AddFile(ctx context.Context, file *RepositoryFile) error
 	}
 
 	//nolint:gosec
-	file.Tag = fmt.Sprintf("%x", md5.Sum([]byte(file.Name)))
+	s := md5.Sum([]byte(file.Name))
+	file.Tag = hex.EncodeToString(s[:])
 
 	db.Lock()
 	result, err := db.NamedExecContext(
@@ -121,7 +123,7 @@ func (db *RepositoryDB) GetFileByTag(ctx context.Context, tag string) (*Reposito
 	file := new(RepositoryFile)
 
 	if !rows.Next() {
-		return nil, fmt.Errorf("failed to retrieve file with tag %s", tag)
+		return nil, sqlite.ErrNoEntryFound
 	}
 	if err := rows.StructScan(file); err != nil {
 		return nil, err
@@ -147,7 +149,7 @@ func (db *RepositoryDB) GetFileByName(ctx context.Context, name string) (*Reposi
 	file := new(RepositoryFile)
 
 	if !rows.Next() {
-		return nil, fmt.Errorf("failed to retrieve file %s", name)
+		return nil, sqlite.ErrNoEntryFound
 	}
 	if err := rows.StructScan(file); err != nil {
 		return nil, err

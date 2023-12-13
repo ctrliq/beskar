@@ -16,6 +16,7 @@ import (
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/hashicorp/go-multierror"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/yum/api/v1"
 	"golang.org/x/sync/semaphore"
@@ -267,7 +268,7 @@ func (h *Handler) GetRepository(ctx context.Context) (properties *apiv1.Reposito
 	return properties, nil
 }
 
-func (h *Handler) SyncRepository(context.Context) (err error) {
+func (h *Handler) SyncRepository(_ context.Context, wait bool) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if !h.getMirror() {
@@ -280,8 +281,19 @@ func (h *Handler) SyncRepository(context.Context) (err error) {
 		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
 	}
 
+	var waitErrCh chan error
+
+	if wait {
+		waitErrCh = make(chan error, 1)
+	}
+
 	select {
-	case h.syncCh <- struct{}{}:
+	case h.syncCh <- waitErrCh:
+		if waitErrCh != nil {
+			if err := <-waitErrCh; err != nil {
+				return werror.Wrap(gcode.ErrInternal, fmt.Errorf("synchronization failed: %w", err))
+			}
+		}
 	default:
 		return werror.Wrap(gcode.ErrUnavailable, errors.New("something goes wrong"))
 	}
@@ -404,9 +416,10 @@ func (h *Handler) RemoveRepositoryPackage(ctx context.Context, id string) (err e
 
 	pkg, err := db.GetPackage(ctx, id)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with id %s not found", id))
+		}
 		return werror.Wrap(gcode.ErrInternal, err)
-	} else if pkg.Tag == "" {
-		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with ID %s not found", id))
 	}
 
 	if err := h.removePackageFromBeskar(ctx, pkg); err != nil {
@@ -433,9 +446,10 @@ func (h *Handler) RemoveRepositoryPackageByTag(ctx context.Context, tag string) 
 
 	pkg, err := db.GetPackageByTag(ctx, tag)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with tag %s not found", tag))
+		}
 		return werror.Wrap(gcode.ErrInternal, err)
-	} else if pkg.Tag == "" {
-		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with tag %s not found", tag))
 	}
 
 	if err := h.removePackageFromBeskar(ctx, pkg); err != nil {
@@ -458,6 +472,9 @@ func (h *Handler) GetRepositoryPackage(ctx context.Context, id string) (reposito
 
 	pkg, err := db.GetPackage(ctx, id)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with id %s not found", id))
+		}
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 
@@ -477,6 +494,9 @@ func (h *Handler) GetRepositoryPackageByTag(ctx context.Context, tag string) (re
 
 	pkg, err := db.GetPackageByTag(ctx, tag)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("package with tag %s not found", tag))
+		}
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 

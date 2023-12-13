@@ -6,10 +6,12 @@ package orasfile
 import (
 	"crypto/md5" //nolint:gosec
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.ciq.dev/beskar/pkg/oras"
 )
 
@@ -18,7 +20,7 @@ const (
 	StaticFileLayerType  = "application/vnd.ciq.static.v1.file"
 )
 
-func NewStaticFilePusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
+func FileReference(filename, repo string, opts ...name.Option) (name.Reference, error) {
 	if !strings.HasPrefix(repo, "artifacts/") {
 		if !strings.HasPrefix(repo, "static/") {
 			repo = filepath.Join("artifacts", "static", repo)
@@ -27,19 +29,46 @@ func NewStaticFilePusher(path, repo string, opts ...name.Option) (oras.Pusher, e
 		}
 	}
 
-	filename := filepath.Base(path)
 	//nolint:gosec
 	fileTag := fmt.Sprintf("%x", md5.Sum([]byte(filename)))
 
 	rawRef := filepath.Join(repo, "files:"+fileTag)
-	ref, err := name.ParseReference(rawRef, opts...)
+	return name.ParseReference(rawRef, opts...)
+}
+
+func NewStaticFilePusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
+	filename := filepath.Base(path)
+
+	ref, err := FileReference(filename, repo, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("while parsing reference %s: %w", rawRef, err)
+		return nil, err
 	}
 
 	return oras.NewGenericPusher(
 		ref,
 		oras.NewManifestConfig(StaticFileConfigType, nil),
-		oras.NewLocalFileLayer(path, oras.WithLocalFileLayerMediaType(StaticFileLayerType)),
+		oras.NewLocalFileLayer(
+			path,
+			oras.WithLayerMediaType(StaticFileLayerType),
+		),
+	), nil
+}
+
+func NewStaticFileStreamPusher(stream io.Reader, filename, repo string, opts ...name.Option) (oras.Pusher, error) {
+	ref, err := FileReference(filename, repo, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return oras.NewGenericPusher(
+		ref,
+		oras.NewManifestConfig(StaticFileConfigType, nil),
+		oras.NewStreamLayer(
+			stream,
+			oras.WithLayerMediaType(StaticFileLayerType),
+			oras.WithLayerAnnotations(map[string]string{
+				imagespec.AnnotationTitle: filename,
+			}),
+		),
 	), nil
 }

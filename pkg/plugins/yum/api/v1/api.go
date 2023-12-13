@@ -5,6 +5,7 @@ package apiv1
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 )
 
@@ -62,6 +63,14 @@ type RepositoryPackage struct {
 	GPGSignature string `json:"gpg_signature"`
 }
 
+func (pkg RepositoryPackage) RPMName() string {
+	arch := pkg.Architecture
+	if pkg.SourceRPM == "" {
+		arch = "src"
+	}
+	return fmt.Sprintf("%s-%s-%s.%s.rpm", pkg.Name, pkg.Version, pkg.Release, arch)
+}
+
 // Mirror sync status.
 type SyncStatus struct {
 	Syncing        bool   `json:"syncing"`
@@ -104,7 +113,7 @@ type YUM interface { //nolint:interfacebloat
 	// Sync YUM repository with an upstream repository.
 	//kun:op GET /repository/sync
 	//kun:success statusCode=200
-	SyncRepository(ctx context.Context, repository string) (err error)
+	SyncRepository(ctx context.Context, repository string, wait bool) (err error)
 
 	// Get YUM repository sync status.
 	//kun:op GET /repository/sync:status
