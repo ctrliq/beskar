@@ -123,7 +123,7 @@ func (db *RepositoryDB) GetFileByTag(ctx context.Context, tag string) (*Reposito
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve file with tag %s", tag)
 	}
-	if err := rows.Scan(file); err != nil {
+	if err := rows.StructScan(file); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +149,7 @@ func (db *RepositoryDB) GetFileByName(ctx context.Context, name string) (*Reposi
 	if !rows.Next() {
 		return nil, fmt.Errorf("failed to retrieve file %s", name)
 	}
-	if err := rows.Scan(file); err != nil {
+	if err := rows.StructScan(file); err != nil {
 		return nil, err
 	}
 
