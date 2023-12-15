@@ -198,7 +198,8 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	oas2.AddResponseDefinitions(defs, schema, "CreateRepository", 200, (&CreateRepositoryResponse{}).Body())
 
 	oas2.AddDefinition(defs, "DeleteRepositoryRequestBody", reflect.ValueOf(&struct {
-		Repository string `json:"repository"`
+		Repository     string `json:"repository"`
+		DeletePackages bool   `json:"delete_packages"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "DeleteRepository", 200, (&DeleteRepositoryResponse{}).Body())
 

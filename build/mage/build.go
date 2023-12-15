@@ -102,7 +102,7 @@ var binaries = map[string]binaryConfig{
 			interfaceName: "Static",
 		},
 		useProto:  true,
-		baseImage: "alpine:3.17",
+		baseImage: BaseImage,
 	},
 	beskarOSTreeBinary: {
 		configFiles: map[string]string{

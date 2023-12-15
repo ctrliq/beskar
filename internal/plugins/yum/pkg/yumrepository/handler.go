@@ -43,22 +43,21 @@ type Handler struct {
 	reposync atomic.Pointer[yumdb.Reposync]
 	syncing  atomic.Bool
 
-	syncArtifactsMutex sync.RWMutex
-	syncArtifacts      map[string]chan error
-
 	propertyMutex sync.RWMutex
+	created       bool
 	mirror        bool
 	keyring       openpgp.KeyRing
 	mirrorURLs    []*url.URL
+
+	delete atomic.Bool
 }
 
 func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) repository.Handler {
 	return &Handler{
-		RepoHandler:   repoHandler,
-		repoDir:       filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
-		logger:        logger,
-		syncCh:        make(chan struct{}, 1),
-		syncArtifacts: make(map[string]chan error),
+		RepoHandler: repoHandler,
+		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),
+		logger:      logger,
+		syncCh:      make(chan struct{}, 1),
 	}
 }
 
@@ -166,16 +165,44 @@ func (h *Handler) cleanup() {
 	h.dbMutex.Lock()
 
 	if h.logDB != nil {
-		h.logDB.Close(true)
+		if err := h.logDB.Close(true); err != nil {
+			h.logger.Error("log database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.logDB.Delete(context.Background()); err != nil {
+				h.logger.Error("log database delete", "error", err.Error())
+			}
+		}
 	}
 	if h.statusDB != nil {
-		h.statusDB.Close(true)
+		if err := h.statusDB.Close(true); err != nil {
+			h.logger.Error("status database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.statusDB.Delete(context.Background()); err != nil {
+				h.logger.Error("status database delete", "error", err.Error())
+			}
+		}
 	}
 	if h.repositoryDB != nil {
-		h.repositoryDB.Close(true)
+		if err := h.repositoryDB.Close(true); err != nil {
+			h.logger.Error("repository database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.repositoryDB.Delete(context.Background()); err != nil {
+				h.logger.Error("repository database delete", "error", err.Error())
+			}
+		}
 	}
 	if h.metadataDB != nil {
-		h.metadataDB.Close(true)
+		if err := h.metadataDB.Close(true); err != nil {
+			h.logger.Error("metadata database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.metadataDB.Delete(context.Background()); err != nil {
+				h.logger.Error("metadata database delete", "error", err.Error())
+			}
+		}
 	}
 
 	h.dbMutex.Unlock()
@@ -197,6 +224,7 @@ func (h *Handler) initProperties(ctx context.Context) error {
 		return err
 	}
 	h.setMirror(properties.Mirror)
+	h.setCreated(properties.Created)
 
 	if len(properties.MirrorURLs) > 0 {
 		var mirrorURLs []string
@@ -255,6 +283,19 @@ func (h *Handler) setMirror(b bool) {
 	h.propertyMutex.Lock()
 	h.mirror = b
 	h.propertyMutex.Unlock()
+}
+
+func (h *Handler) setCreated(created bool) {
+	h.propertyMutex.Lock()
+	h.created = created
+	h.propertyMutex.Unlock()
+}
+
+func (h *Handler) isCreated() bool {
+	h.propertyMutex.RLock()
+	defer h.propertyMutex.RUnlock()
+
+	return h.created
 }
 
 func (h *Handler) getMirror() bool {
@@ -344,7 +385,7 @@ func (h *Handler) Start(ctx context.Context) {
 		reposync.Syncing = false
 	}
 
-	numEvents, err := statusDB.CountEnvents(ctx)
+	numEvents, err := statusDB.CountEvents(ctx)
 	if err != nil {
 		h.cleanup()
 		h.logger.Error("status DB getting events count", "error", err.Error())
@@ -388,6 +429,13 @@ func (h *Handler) Start(ctx context.Context) {
 				}()
 			case <-h.Queued:
 				events := h.DequeueEvents()
+
+				if !h.isCreated() {
+					h.setCreated(true)
+					if err := statusDB.SetCreatedProperty(dbCtx); err != nil {
+						h.logger.Error("status DB set created property", "error", err.Error())
+					}
+				}
 
 				h.processEvents(events)
 
@@ -456,7 +504,7 @@ func (h *Handler) processEvents(events []*eventv1.EventPayload) {
 		}
 	}
 
-	if !h.getMirror() {
+	if !h.getMirror() && !h.delete.Load() {
 		err := h.generateAndPushMetadata(processContext)
 		if err != nil {
 			h.logger.Error("generate/push metadata", "error", err.Error())

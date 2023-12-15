@@ -167,7 +167,7 @@ func (db *StatusDB) WalkEvents(ctx context.Context, walkFn WalkEventsFunc) error
 	return nil
 }
 
-func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
+func (db *StatusDB) CountEvents(ctx context.Context) (int, error) {
 	db.Reference.Add(1)
 	defer db.Reference.Add(-1)
 
@@ -175,7 +175,7 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	rows, err := db.QueryxContext(ctx, "SELECT COUNT(id) as id FROM events")
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(id) FROM events")
 	if err != nil {
 		return 0, err
 	}
@@ -183,10 +183,11 @@ func (db *StatusDB) CountEnvents(ctx context.Context) (int, error) {
 
 	count := 0
 
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in events table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
 	}
 
 	return count, nil
@@ -208,11 +209,11 @@ func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 
 	properties := new(Properties)
 
-	for rows.Next() {
-		err := rows.StructScan(properties)
-		if err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve repository properties")
+	}
+	if err := rows.StructScan(properties); err != nil {
+		return nil, err
 	}
 
 	return properties, nil
@@ -231,6 +232,35 @@ func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties
 		ctx,
 		"UPDATE properties SET created = :created, mirror = :mirror, mirror_urls = :mirror_urls, gpg_key = :gpg_key WHERE id = 1",
 		properties,
+	)
+	db.Unlock()
+
+	if err != nil {
+		return err
+	}
+
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	} else if inserted != 1 {
+		return fmt.Errorf("properties not updated in status database")
+	}
+
+	return nil
+}
+
+func (db *StatusDB) SetCreatedProperty(ctx context.Context) error {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(
+		ctx,
+		"UPDATE properties SET created = true WHERE id = 1",
 	)
 	db.Unlock()
 
@@ -267,11 +297,11 @@ func (db *StatusDB) GetReposync(ctx context.Context) (*Reposync, error) {
 
 	reposync := new(Reposync)
 
-	for rows.Next() {
-		err := rows.StructScan(reposync)
-		if err != nil {
-			return nil, err
-		}
+	if !rows.Next() {
+		return nil, fmt.Errorf("failed to retrieve reposync data")
+	}
+	if err := rows.StructScan(reposync); err != nil {
+		return nil, err
 	}
 
 	return reposync, nil

@@ -34,7 +34,7 @@ func NewHTTPClient(codecs httpcodec.Codecs, httpClient *http.Client, baseURL str
 	}, nil
 }
 
-func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string) (err error) {
+func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string, deleteFiles bool) (err error) {
 	codec := c.codecs.EncodeDecoder("DeleteRepository")
 
 	path := "/repository"
@@ -45,9 +45,11 @@ func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string) (e
 	}
 
 	reqBody := struct {
-		Repository string `json:"repository"`
+		Repository  string `json:"repository"`
+		DeleteFiles bool   `json:"delete_files"`
 	}{
-		Repository: repository,
+		Repository:  repository,
+		DeleteFiles: deleteFiles,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
 	if err != nil {

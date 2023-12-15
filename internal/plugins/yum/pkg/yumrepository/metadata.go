@@ -53,6 +53,8 @@ func (h *Handler) processMetadataManifest(ctx context.Context, metadataManifest 
 	metadataPath := filepath.Join(h.downloadDir(), metadataFilename)
 
 	defer func() {
+		h.SyncArtifactResult(metadataFilename, errFn)
+
 		if errFn != nil {
 			h.logger.Error("process metadata manifest", "metadata", metadataFilename, "error", errFn.Error())
 			h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest: %s", metadataFilename, errFn)
@@ -117,6 +119,8 @@ func (h *Handler) deleteMetadataManifest(ctx context.Context, metadataManifest *
 	metadataFilename := packageLayer.Annotations[imagespec.AnnotationTitle]
 
 	defer func() {
+		h.SyncArtifactResult(metadataFilename, errFn)
+
 		if errFn != nil {
 			h.logger.Error("process metadata manifest removal", "metadata", metadataFilename, "error", errFn.Error())
 			h.logDatabase(ctx, yumdb.LogError, "process metadata %s manifest removal: %s", metadataFilename, errFn)

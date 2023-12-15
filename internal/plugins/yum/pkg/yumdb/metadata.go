@@ -119,7 +119,7 @@ func (db *MetadataDB) CountPackages(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	rows, err := db.QueryxContext(ctx, "SELECT COUNT(name) AS name FROM packages")
+	rows, err := db.QueryxContext(ctx, "SELECT COUNT(name) FROM packages")
 	if err != nil {
 		return 0, err
 	}
@@ -127,10 +127,11 @@ func (db *MetadataDB) CountPackages(ctx context.Context) (int, error) {
 
 	count := 0
 
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows found in packages table to count")
+	}
+	if err := rows.Scan(&count); err != nil {
+		return 0, err
 	}
 
 	return count, nil

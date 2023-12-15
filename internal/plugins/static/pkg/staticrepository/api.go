@@ -5,23 +5,72 @@ package staticrepository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
+	"github.com/hashicorp/go-multierror"
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticdb"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/static/api/v1"
+	"golang.org/x/sync/semaphore"
 )
 
-func (h *Handler) DeleteRepository(_ context.Context) (err error) {
+func (h *Handler) DeleteRepository(ctx context.Context, deleteFiles bool) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if h.delete.Swap(true) {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	}
+	defer func() {
+		h.SyncArtifactReset()
+
+		if err == nil {
+			// stop the repo handler and trigger cleanup
+			h.Stop()
+		} else {
+			h.delete.Store(false)
+		}
+	}()
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	return werror.Wrap(gcode.ErrNotImplemented, errors.New("repository delete not supported yet"))
+	if !deleteFiles {
+		count, err := db.CountFiles(ctx)
+		if err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		} else if count > 0 {
+			return werror.Wrap(gcode.ErrFailedPrecondition, fmt.Errorf("repository %s has %d files associated with it", h.Repository, count))
+		}
+	} else {
+		deleteFile := new(multierror.Group)
+		// maximum parallel file deletion
+		sem := semaphore.NewWeighted(100)
+
+		// delete all files associated with this repo
+		err = db.WalkFiles(ctx, func(file *staticdb.RepositoryFile) error {
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return err
+			}
+			deleteFile.Go(func() error {
+				defer sem.Release(1)
+				return h.removeRepositoryFile(ctx, file)
+			})
+			return nil
+		})
+		if err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+		if err := deleteFile.Wait().ErrorOrNil(); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	return nil
 }
 
 func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs []apiv1.RepositoryLog, err error) {
@@ -50,9 +99,34 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 	return logs, nil
 }
 
+func (h *Handler) removeRepositoryFile(ctx context.Context, file *staticdb.RepositoryFile) error {
+	tagRef := filepath.Join(h.Repository, "files:"+file.Tag)
+
+	digest, err := h.GetManifestDigest(tagRef)
+	if err != nil {
+		return err
+	}
+
+	errCh, waitSync := h.SyncArtifact(ctx, file.Name, time.Minute)
+
+	digestRef := filepath.Join(h.Repository, "files@"+digest)
+
+	if err := h.DeleteManifest(digestRef); err != nil {
+		errCh <- err
+	}
+
+	if err := waitSync(); err != nil {
+		return fmt.Errorf("file %s removal processing error: %w", file.Name, err)
+	}
+
+	return nil
+}
+
 func (h *Handler) RemoveRepositoryFile(ctx context.Context, tag string) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	}
 
 	db, err := h.getRepositoryDB(ctx)
@@ -66,18 +140,7 @@ func (h *Handler) RemoveRepositoryFile(ctx context.Context, tag string) (err err
 		return werror.Wrap(gcode.ErrInternal, err)
 	} else if file.Tag == "" {
 		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with tag %s not found", tag))
-	}
-
-	tagRef := filepath.Join(h.Repository, "files:"+file.Tag)
-
-	digest, err := h.GetManifestDigest(tagRef)
-	if err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
-	}
-
-	digestRef := filepath.Join(h.Repository, "files@"+digest)
-
-	if err := h.DeleteManifest(digestRef); err != nil {
+	} else if err := h.removeRepositoryFile(ctx, file); err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
 

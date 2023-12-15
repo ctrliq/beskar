@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -30,6 +31,8 @@ type Handler struct {
 	repositoryDB *staticdb.RepositoryDB
 	logDB        *staticdb.LogDB
 	statusDB     *staticdb.StatusDB
+
+	delete atomic.Bool
 }
 
 func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) repository.Handler {
@@ -68,13 +71,34 @@ func (h *Handler) cleanup() {
 	h.dbMutex.Lock()
 
 	if h.logDB != nil {
-		h.logDB.Close(true)
+		if err := h.logDB.Close(true); err != nil {
+			h.logger.Error("log database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.logDB.Delete(context.Background()); err != nil {
+				h.logger.Error("log database delete", "error", err.Error())
+			}
+		}
 	}
 	if h.statusDB != nil {
-		h.statusDB.Close(true)
+		if err := h.statusDB.Close(true); err != nil {
+			h.logger.Error("status database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.statusDB.Delete(context.Background()); err != nil {
+				h.logger.Error("status database delete", "error", err.Error())
+			}
+		}
 	}
 	if h.repositoryDB != nil {
-		h.repositoryDB.Close(true)
+		if err := h.repositoryDB.Close(true); err != nil {
+			h.logger.Error("repository database close", "error", err.Error())
+		}
+		if h.delete.Load() {
+			if err := h.repositoryDB.Delete(context.Background()); err != nil {
+				h.logger.Error("repository database delete", "error", err.Error())
+			}
+		}
 	}
 
 	h.dbMutex.Unlock()
@@ -144,7 +168,7 @@ func (h *Handler) Start(ctx context.Context) {
 		return
 	}
 
-	numEvents, err := statusDB.CountEnvents(ctx)
+	numEvents, err := statusDB.CountEvents(ctx)
 	if err != nil {
 		h.cleanup()
 		h.logger.Error("status DB getting events count", "error", err.Error())
@@ -168,9 +192,7 @@ func (h *Handler) Start(ctx context.Context) {
 			case <-ctx.Done():
 				h.Stopped.Store(true)
 			case <-h.Queued:
-				events := h.DequeueEvents()
-
-				h.processEvents(events)
+				h.processEvents()
 
 				if h.EventQueueLength() > 0 {
 					h.EventQueueUpdate()
@@ -181,10 +203,10 @@ func (h *Handler) Start(ctx context.Context) {
 	}()
 }
 
-func (h *Handler) processEvents(events []*eventv1.EventPayload) {
+func (h *Handler) processEvents() {
 	processContext := context.Background()
 
-	for _, event := range events {
+	for _, event := range h.DequeueEvents() {
 		manifest, err := v1.ParseManifest(bytes.NewReader(event.Payload))
 		if err != nil {
 			h.logger.Error("parse package manifest", "error", err.Error())

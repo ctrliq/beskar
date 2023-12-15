@@ -41,16 +41,17 @@ func (p *Plugin) CreateRepository(ctx context.Context, repository string, proper
 	return h.CreateRepository(ctx, properties)
 }
 
-func (p *Plugin) DeleteRepository(ctx context.Context, repository string) (err error) {
+func (p *Plugin) DeleteRepository(ctx context.Context, repository string, deletePackages bool) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
+
 	h, err := p.getHandlerForRepository(ctx, repository)
 	if err != nil {
 		return err
 	}
 
-	return h.DeleteRepository(ctx)
+	return h.DeleteRepository(ctx, deletePackages)
 }
 
 func (p *Plugin) UpdateRepository(ctx context.Context, repository string, properties *apiv1.RepositoryProperties) (err error) {

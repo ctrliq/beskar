@@ -29,7 +29,7 @@ func (p *Plugin) getHandlerForRepository(ctx context.Context, repository string)
 	return h, nil
 }
 
-func (p *Plugin) DeleteRepository(ctx context.Context, repository string) (err error) {
+func (p *Plugin) DeleteRepository(ctx context.Context, repository string, deleteFiles bool) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
@@ -38,7 +38,7 @@ func (p *Plugin) DeleteRepository(ctx context.Context, repository string) (err e
 		return err
 	}
 
-	return h.DeleteRepository(ctx)
+	return h.DeleteRepository(ctx, deleteFiles)
 }
 
 func (p *Plugin) ListRepositoryLogs(ctx context.Context, repository string, page *apiv1.Page) (logs []apiv1.RepositoryLog, err error) {
