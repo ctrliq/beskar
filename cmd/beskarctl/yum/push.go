@@ -12,24 +12,22 @@ import (
 	"go.ciq.dev/beskar/pkg/orasrpm"
 )
 
-var (
-	pushCmd = &cobra.Command{
-		Use:   "push [rpm filepath]",
-		Short: "Push a yum repository to a registry.",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rpm := args[0]
-			if rpm == "" {
-				return ctl.Err("an RPM package must be specified")
-			}
+var pushCmd = &cobra.Command{
+	Use:   "push [rpm filepath]",
+	Short: "Push a yum repository to a registry.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		rpm := args[0]
+		if rpm == "" {
+			return ctl.Err("an RPM package must be specified")
+		}
 
-			if err := push(rpm, ctl.Repo(), ctl.Registry()); err != nil {
-				return ctl.Errf("while pushing RPM package: %s", err)
-			}
-			return nil
-		},
-	}
-)
+		if err := push(rpm, ctl.Repo(), ctl.Registry()); err != nil {
+			return ctl.Errf("while pushing RPM package: %s", err)
+		}
+		return nil
+	},
+}
 
 func PushCmd() *cobra.Command {
 	return pushCmd

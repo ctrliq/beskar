@@ -29,7 +29,7 @@ output = obj {
         1
     )[0]
     redirect := blob_url(
-        sprintf("%s/files", [match[1]]),
+        sprintf("%s/file", [match[1]]),
         match[2],
     )
     obj := {
@@ -44,7 +44,7 @@ output = obj {
         input.path,
         1
     )[0]
-    repo := object.get({}, data.routes[index].body_key, "")
+    repo := object.get(request.body(), data.routes[index].body_key, "")
     obj := {
         "repository": repo,
         "redirect_url": "",

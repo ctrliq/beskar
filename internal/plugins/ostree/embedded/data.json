@@ -1,7 +1,7 @@
 {
   "routes": [
     {
-      "pattern": "^/(artifacts/ostree/[a-z0-9]+(?:[/._-][a-z0-9]+)*)/file/([a-z0-9]+(?:[/._-][a-z0-9]+)*)$",
+      "pattern": "^/(artifacts/ostree/[a-z0-9]+(?:[/._-][a-z0-9]+)*)/repo/([a-z0-9]+(?:[/._-][a-z0-9]+)*)$",
       "methods": [
         "GET",
         "HEAD"
@@ -22,6 +22,7 @@
   },
   "tags": [
     "summary",
+    "summary.sig",
     "config"
   ]
 }

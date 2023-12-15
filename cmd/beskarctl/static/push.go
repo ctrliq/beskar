@@ -2,6 +2,7 @@ package static
 
 import (
 	"fmt"
+
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -11,24 +12,22 @@ import (
 	"go.ciq.dev/beskar/pkg/orasfile"
 )
 
-var (
-	pushCmd = &cobra.Command{
-		Use:   "push [file]",
-		Short: "Push a file.",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			file := args[0]
-			if file == "" {
-				return ctl.Err("file must be specified")
-			}
+var pushCmd = &cobra.Command{
+	Use:   "push [file]",
+	Short: "Push a file.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		file := args[0]
+		if file == "" {
+			return ctl.Err("file must be specified")
+		}
 
-			if err := push(file, ctl.Repo(), ctl.Registry()); err != nil {
-				return ctl.Errf("while pushing static file: %s", err)
-			}
-			return nil
-		},
-	}
-)
+		if err := push(file, ctl.Repo(), ctl.Registry()); err != nil {
+			return ctl.Errf("while pushing static file: %s", err)
+		}
+		return nil
+	},
+}
 
 func PushCmd() *cobra.Command {
 	return pushCmd
