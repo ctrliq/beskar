@@ -3,8 +3,17 @@
 
 package main
 
-import "go.ciq.dev/beskar/cmd/beskarctl/ctl"
+import (
+	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
+	"go.ciq.dev/beskar/cmd/beskarctl/ostree"
+	"go.ciq.dev/beskar/cmd/beskarctl/static"
+	"go.ciq.dev/beskar/cmd/beskarctl/yum"
+)
 
 func main() {
-	ctl.Execute()
+	ctl.Execute(
+		yum.RootCmd(),
+		static.RootCmd(),
+		ostree.RootCmd(),
+	)
 }

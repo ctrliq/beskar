@@ -31,9 +31,9 @@ type Page struct {
 //kun:oas version=1.0.0
 //kun:oas basePath=/artifacts/ostree/api/v1
 //kun:oas docsPath=/doc/swagger.yaml
-//kun:oas tags=static
+//kun:oas tags=ostree
 type OSTree interface {
-	// Mirror a static repository.
+	// Mirror an ostree repository.
 	//kun:op POST /repository/mirror
 	//kun:success statusCode=200
 	MirrorRepository(ctx context.Context, repository string, depth int) (err error)

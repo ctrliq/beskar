@@ -31,10 +31,10 @@ produces:
 paths:
   /repository/mirror:
     post:
-      description: "Mirror a static repository."
+      description: "Mirror an ostree repository."
       operationId: "MirrorRepository"
       tags:
-        - static
+        - ostree
       parameters:
         - name: body
           in: body

@@ -2,11 +2,9 @@ package ctl
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"go.ciq.dev/beskar/cmd/beskarctl/ostree"
-	"go.ciq.dev/beskar/cmd/beskarctl/static"
-	"go.ciq.dev/beskar/cmd/beskarctl/yum"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
@@ -14,13 +12,11 @@ var rootCmd = &cobra.Command{
 	Short: "Operations related to beskar.",
 }
 
-func Execute() {
+func Execute(cmds ...*cobra.Command) {
 	RegisterFlags(rootCmd)
 
 	rootCmd.AddCommand(
-		yum.RootCmd(),
-		static.RootCmd(),
-		ostree.RootCmd(),
+		cmds...,
 	)
 
 	err := rootCmd.Execute()
