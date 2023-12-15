@@ -134,8 +134,8 @@ func Serve(ln net.Listener, service Service) (errFn error) {
 			manager:    repoManager,
 		}
 
-		serviceConfig.Router.HandleFunc("/event", http.HandlerFunc(wh.event))
-		serviceConfig.Router.HandleFunc("/info", http.HandlerFunc(wh.info))
+		serviceConfig.Router.With(IsTLSMiddleware).HandleFunc("/event", wh.event)
+		serviceConfig.Router.With(IsTLSMiddleware).HandleFunc("/info", wh.info)
 
 		transport, err := getBeskarTransport(caPEM, beskarMeta)
 		if err != nil {

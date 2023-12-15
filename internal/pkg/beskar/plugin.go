@@ -411,7 +411,3 @@ func loadPlugins(ctx context.Context) (func(), error) {
 
 	return wg.Wait, nil
 }
-
-// Mountain Team - Lead Developer
-// Fuzzball Team -
-// Innovation Group - Tech Ambassador ()

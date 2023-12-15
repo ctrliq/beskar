@@ -38,7 +38,13 @@ var (
 )
 
 func PushCmd() *cobra.Command {
-	pushCmd.PersistentFlags().IntVarP(&jobCount, "jobs", "j", 10, "The repository to operate on.")
+	pushCmd.Flags().IntVarP(
+		&jobCount,
+		"jobs",
+		"j",
+		10,
+		"The number of concurrent jobs to use for pushing the repository.",
+	)
 	return pushCmd
 }
 
@@ -50,8 +56,10 @@ func pushOSTreeRepository(dir, repo, registry string) error {
 	// Prove that we were given the root directory of an ostree repository
 	// by checking for the existence of the summary file.
 	fileInfo, err := os.Stat(filepath.Join(dir, orasostree.KnownFileSummary))
-	if err != nil || fileInfo.IsDir() {
+	if os.IsNotExist(err) || fileInfo.IsDir() {
 		return fmt.Errorf("%s file not found in %s", orasostree.KnownFileSummary, dir)
+	} else if err != nil {
+		return fmt.Errorf("error accessing %s in %s: %w", orasostree.KnownFileSummary, dir, err)
 	}
 
 	// Create a worker pool to push each file in the repository concurrently.
@@ -100,7 +108,7 @@ func pushOSTreeRepository(dir, repo, registry string) error {
 func push(repoRootDir, path, repo, registry string) error {
 	pusher, err := orasostree.NewOSTreePusher(repoRootDir, path, repo, name.WithDefaultRegistry(registry))
 	if err != nil {
-		return fmt.Errorf("while creating StaticFile pusher: %w", err)
+		return fmt.Errorf("while creating OSTree pusher: %w", err)
 	}
 
 	path = strings.TrimPrefix(path, repoRootDir)

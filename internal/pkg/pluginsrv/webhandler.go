@@ -41,11 +41,7 @@ func IsTLSMiddleware(next http.Handler) http.Handler {
 
 func (wh *webHandler) event(w http.ResponseWriter, r *http.Request) {
 	if wh.manager == nil {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
-	if !IsTLS(w, r) {
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -100,10 +96,6 @@ func (wh *webHandler) event(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wh *webHandler) info(w http.ResponseWriter, r *http.Request) {
-	if !IsTLS(w, r) {
-		return
-	}
-
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusNotImplemented)
 		return

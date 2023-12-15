@@ -14,6 +14,6 @@ func newAPIService() *apiService {
 	return &apiService{}
 }
 
-func (o *apiService) MirrorRepository(ctx context.Context, repository string, depth int) (err error) {
+func (o *apiService) MirrorRepository(_ context.Context, _ string, _ int) (err error) {
 	return werror.Wrap(gcode.ErrNotImplemented, errors.New("repository mirroring not yet supported"))
 }
