@@ -24,6 +24,13 @@ type Page struct {
 	Token string
 }
 
+type OSTreeRepositoryProperties struct {
+	RemoteURL string `json:"remote_url"`
+	Branch    string `json:"branch"`
+	Depth     int    `json:"depth"`
+	Mirror    bool   `json:"mirror"`
+}
+
 // OSTree is used for managing ostree repositories.
 // This is the API documentation of OSTree.
 //
@@ -36,5 +43,5 @@ type OSTree interface {
 	// Mirror an ostree repository.
 	//kun:op POST /repository/mirror
 	//kun:success statusCode=200
-	MirrorRepository(ctx context.Context, repository string, depth int) (err error)
+	MirrorRepository(ctx context.Context, repository string, properties *OSTreeRepositoryProperties) (err error)
 }

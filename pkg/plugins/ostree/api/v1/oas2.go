@@ -54,8 +54,8 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	defs := make(map[string]oas2.Definition)
 
 	oas2.AddDefinition(defs, "MirrorRepositoryRequestBody", reflect.ValueOf(&struct {
-		Repository string `json:"repository"`
-		Depth      int    `json:"depth"`
+		Repository string                      `json:"repository"`
+		Properties *OSTreeRepositoryProperties `json:"properties"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "MirrorRepository", 200, (&MirrorRepositoryResponse{}).Body())
 

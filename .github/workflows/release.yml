@@ -57,3 +57,17 @@ jobs:
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-static:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
       - name: Release beskar-static helm chart
         run: ./scripts/mage ci:chart ghcr.io/ctrliq/helm-charts/beskar-static:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
+
+  release-beskar-ostree:
+    name: release beskar-ostree
+    needs: lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+      - uses: actions/checkout@v3
+      - name: Release beskar-ostree image
+        run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-ostree:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
+      - name: Release beskar-ostree helm chart
+        run: ./scripts/mage ci:chart ghcr.io/ctrliq/helm-charts/beskar-ostree:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"

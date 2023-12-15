@@ -12,8 +12,8 @@ import (
 )
 
 type MirrorRepositoryRequest struct {
-	Repository string `json:"repository"`
-	Depth      int    `json:"depth"`
+	Repository string                      `json:"repository"`
+	Properties *OSTreeRepositoryProperties `json:"properties"`
 }
 
 // ValidateMirrorRepositoryRequest creates a validator for MirrorRepositoryRequest.
@@ -40,7 +40,7 @@ func MakeEndpointOfMirrorRepository(s OSTree) endpoint.Endpoint {
 		err := s.MirrorRepository(
 			ctx,
 			req.Repository,
-			req.Depth,
+			req.Properties,
 		)
 		return &MirrorRepositoryResponse{
 			Err: err,

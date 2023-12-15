@@ -34,7 +34,7 @@ func NewHTTPClient(codecs httpcodec.Codecs, httpClient *http.Client, baseURL str
 	}, nil
 }
 
-func (c *HTTPClient) MirrorRepository(ctx context.Context, repository string, depth int) (err error) {
+func (c *HTTPClient) MirrorRepository(ctx context.Context, repository string, properties *OSTreeRepositoryProperties) (err error) {
 	codec := c.codecs.EncodeDecoder("MirrorRepository")
 
 	path := "/repository/mirror"
@@ -45,11 +45,11 @@ func (c *HTTPClient) MirrorRepository(ctx context.Context, repository string, de
 	}
 
 	reqBody := struct {
-		Repository string `json:"repository"`
-		Depth      int    `json:"depth"`
+		Repository string                      `json:"repository"`
+		Properties *OSTreeRepositoryProperties `json:"properties"`
 	}{
 		Repository: repository,
-		Depth:      depth,
+		Properties: properties,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
 	if err != nil {
