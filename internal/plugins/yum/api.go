@@ -45,6 +45,7 @@ func (p *Plugin) DeleteRepository(ctx context.Context, repository string, delete
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
+
 	h, err := p.getHandlerForRepository(ctx, repository)
 	if err != nil {
 		return err
