@@ -10,14 +10,15 @@ import (
 
 	"dagger.io/dagger"
 	"golang.org/x/sys/cpu"
+	"golang.org/x/tools/go/packages"
 )
 
 const (
-	GoImage           = "golang:1.21.4-alpine"
+	GoImage           = "golang:1.21.5-alpine3.19"
 	GolangCILintImage = "golangci/golangci-lint:v1.54.2-alpine"
 	HelmImage         = "alpine/helm:3.12.2"
 	ProtolintImage    = "yoheimuta/protolint:0.45.0"
-	BaseImage         = "alpine:3.17"
+	BaseImage         = "alpine:3.19"
 
 	ProtocVersion    = "v23.4"
 	ProtocFileFormat = "protoc-23.4-linux-%s.zip"
@@ -65,7 +66,25 @@ func getSource(client *dagger.Client) *dagger.Directory {
 			"README.md",
 			"go.work",
 			"go.work.sum",
+			"integration",
 		},
+	})
+}
+
+func getIntegrationSource(client *dagger.Client) *dagger.Directory {
+	return client.Host().Directory(".", dagger.HostDirectoryOpts{
+		Include: []string{
+			"go.mod",
+			"go.sum",
+			"integration",
+			"pkg",
+		},
+	})
+}
+
+func getBuildBinaries(client *dagger.Client, binaries ...string) *dagger.Directory {
+	return client.Host().Directory("build/output", dagger.HostDirectoryOpts{
+		Include: binaries,
 	})
 }
 
@@ -121,4 +140,49 @@ func getSupportedPlatforms() []dagger.Platform {
 func getPlatformBinarySuffix(platform string) string {
 	platform = strings.TrimPrefix(platform, "linux/")
 	return strings.ReplaceAll(platform, "/", "-")
+}
+
+func getGoFiles(dir string) ([]string, error) {
+	cfg := packages.Config{
+		Mode: packages.NeedFiles |
+			packages.NeedEmbedFiles |
+			packages.NeedImports |
+			packages.NeedName |
+			packages.NeedDeps |
+			packages.NeedModule,
+		Dir: dir,
+	}
+
+	initial, err := packages.Load(&cfg, ".")
+	if err != nil {
+		return nil, fmt.Errorf("while loading directory %s: %s", dir, err)
+	}
+	for _, pkg := range initial {
+		if len(pkg.Errors) > 0 {
+			return nil, fmt.Errorf("package error: %s", pkg.Errors[0])
+		}
+	}
+
+	fileMap := make(map[string]struct{})
+	files := make([]string, 0)
+
+	add := func(sourceFiles []string) {
+		for _, file := range sourceFiles {
+			if _, ok := fileMap[file]; !ok {
+				fileMap[file] = struct{}{}
+				files = append(files, file)
+			}
+		}
+	}
+
+	packages.Visit(initial, nil, func(pkg *packages.Package) {
+		if pkg.Module == nil {
+			return
+		}
+		add(pkg.GoFiles)
+		add(pkg.OtherFiles)
+		add(pkg.EmbedFiles)
+	})
+
+	return files, nil
 }

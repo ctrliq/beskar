@@ -26,9 +26,8 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/distribution/distribution/v3"
-	dcontext "github.com/distribution/distribution/v3/context"
-	"github.com/gorilla/mux"
 	"github.com/hashicorp/memberlist"
+	"github.com/sirupsen/logrus"
 	"go.ciq.dev/beskar/internal/pkg/gossip"
 	"go.ciq.dev/beskar/internal/pkg/router"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
@@ -38,7 +37,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var artifactsMatch = regexp.MustCompile(`^/?artifacts/([[:alnum:]]+)/?`)
+var (
+	artifactsMatch = regexp.MustCompile(`^/?artifacts/([[:alnum:]]+)/?`)
+	artifactsPath  = "/artifacts"
+)
 
 type nodeInfo struct {
 	pluginName string
@@ -52,18 +54,22 @@ type pluginManager struct {
 	reverseProxy *httputil.ReverseProxy
 	nodesInfo    map[string]nodeInfo
 	httpClient   *http.Client
+	logger       *logrus.Entry
 }
 
-func newPluginManager(registry distribution.Namespace, router *mux.Router) *pluginManager {
+func newPluginManager(registry distribution.Namespace, logger *logrus.Entry) *pluginManager {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.IdleConnTimeout = 30 * time.Second
+	transport.MaxIdleConnsPerHost = 16
 
 	reverseProxy := &httputil.ReverseProxy{
 		Transport: transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
-			target := *pr.In.URL
+			target := new(url.URL)
+			*target = *pr.In.URL
 			target.Path = ""
 			target.Scheme = "https"
-			pr.SetURL(&target)
+			pr.SetURL(target)
 			hostport, ok := getReverseProxyHostport(pr.In.Context())
 			if ok {
 				pr.Out.Host = hostport
@@ -75,24 +81,21 @@ func newPluginManager(registry distribution.Namespace, router *mux.Router) *plug
 		},
 	}
 
-	pm := &pluginManager{
+	return &pluginManager{
 		plugins:      make(map[string]*plugin),
 		registry:     registry,
 		reverseProxy: reverseProxy,
 		nodesInfo:    make(map[string]nodeInfo),
+		logger:       logger,
 		httpClient: &http.Client{
-			Transport: transport,
-			Timeout:   time.Minute,
+			Transport: reverseProxy.Transport,
+			Timeout:   5 * time.Second,
 		},
 	}
-
-	router.PathPrefix("/artifacts").Handler(pm)
-
-	return pm
 }
 
 func (pm *pluginManager) setClientTLSConfig(tlsConfig *tls.Config) {
-	transport := pm.httpClient.Transport.(*http.Transport)
+	transport := pm.reverseProxy.Transport.(*http.Transport)
 	transport.TLSClientConfig = tlsConfig
 }
 
@@ -140,6 +143,7 @@ func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta
 			registry:     pm.registry,
 			httpClient:   pm.httpClient,
 			reverseProxy: pm.reverseProxy,
+			logger:       pm.logger,
 		}
 
 		if err := pl.initRouter(info); err != nil {
@@ -261,6 +265,7 @@ type plugin struct {
 	httpClient   *http.Client
 	reverseProxy *httputil.ReverseProxy
 	router       atomic.Pointer[router.RegoRouter]
+	logger       *logrus.Entry
 }
 
 func (p *plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +273,7 @@ func (p *plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, err := p.router.Load().Decision(r, p.registry)
 	if err != nil {
-		dcontext.GetLogger(r.Context()).Errorf("%s router decision error: %s", p.name, err)
+		p.logger.Errorf("%s router decision error: %s", p.name, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if !result.Found {
@@ -306,6 +311,9 @@ func (p *plugin) sendEvent(ctx context.Context, event *eventv1.EventPayload, nod
 		destNode := node
 		if destNode == nil {
 			destNode = p.nodeHash.Get(repository)
+		}
+		if destNode == nil {
+			return fmt.Errorf("no node found for repository %s", repository)
 		}
 
 		pluginURL := url.URL{

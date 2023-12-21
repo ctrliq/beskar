@@ -54,33 +54,44 @@ type binaryConfig struct {
 	genAPI            *genAPI
 	buildTags         []string
 	baseImage         string
+	integrationTest   *integrationTest
 }
 
 const (
-	beskarBinary       = "beskar"
-	beskarctlBinary    = "beskarctl"
-	beskarYUMBinary    = "beskar-yum"
-	beskarStaticBinary = "beskar-static"
+	BeskarBinary       = "beskar"
+	BeskarctlBinary    = "beskarctl"
+	BeskarYUMBinary    = "beskar-yum"
+	BeskarStaticBinary = "beskar-static"
 )
 
 var binaries = map[string]binaryConfig{
-	beskarBinary: {
+	BeskarBinary: {
 		configFiles: map[string]string{
 			"internal/pkg/config/default/beskar.yaml": "/etc/beskar/beskar.yaml",
 		},
 		useProto:  true,
 		buildTags: []string{"include_gcs"},
+		integrationTest: &integrationTest{
+			envs: map[string]string{
+				"BESKAR_REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY": "/tmp/integration/registry",
+				"BESKAR_REGISTRY_LOG_ACCESSLOG_DISABLED":           "true",
+				"BESKAR_REGISTRY_HTTP_ADDR":                        "127.0.0.1:5100",
+				"BESKAR_GOSSIP_ADDR":                               "127.0.0.1:5102",
+				"BESKAR_CACHE_ADDR":                                "127.0.0.1:5103",
+			},
+		},
 	},
-	beskarctlBinary: {},
-	beskarYUMBinary: {
+	BeskarctlBinary: {},
+	BeskarYUMBinary: {
 		configFiles: map[string]string{
 			"internal/plugins/yum/pkg/config/default/beskar-yum.yaml": "/etc/beskar/beskar-yum.yaml",
 		},
 		execStmts: [][]string{
 			{
-				//"apk", "add", "-U", "bash", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/",
-				"sh", "-c", "apt-get update -y && apt-get install -y --no-install-recommends ca-certificates createrepo-c && " +
-					"rm -rf /var/lib/apt/lists/* && rm -Rf /usr/share/doc && rm -Rf /usr/share/man && apt-get clean",
+				"apk", "add", "createrepo_c", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/",
+				// NOTE: restore in case alpine createrepo_c package is broken again
+				//"sh", "-c", "apt-get update -y && apt-get install -y --no-install-recommends ca-certificates createrepo-c && " +
+				//	"rm -rf /var/lib/apt/lists/* && rm -Rf /usr/share/doc && rm -Rf /usr/share/man && apt-get clean",
 			},
 		},
 		genAPI: &genAPI{
@@ -88,10 +99,19 @@ var binaries = map[string]binaryConfig{
 			filename:      "api.go",
 			interfaceName: "YUM",
 		},
-		useProto:  true,
-		baseImage: "debian:bullseye-slim",
+		useProto: true,
+		// NOTE: restore in case alpine createrepo_c package is broken again
+		//baseImage: "debian:bullseye-slim",
+		integrationTest: &integrationTest{
+			isPlugin: true,
+			envs: map[string]string{
+				"BESKARYUM_ADDR":                         "127.0.0.1:5200",
+				"BESKARYUM_GOSSIP_ADDR":                  "127.0.0.1:5201",
+				"BESKARYUM_STORAGE_FILESYSTEM_DIRECTORY": "/tmp/integration/beskar-yum",
+			},
+		},
 	},
-	beskarStaticBinary: {
+	BeskarStaticBinary: {
 		configFiles: map[string]string{
 			"internal/plugins/static/pkg/config/default/beskar-static.yaml": "/etc/beskar/beskar-static.yaml",
 		},
@@ -100,8 +120,15 @@ var binaries = map[string]binaryConfig{
 			filename:      "api.go",
 			interfaceName: "Static",
 		},
-		useProto:  true,
-		baseImage: BaseImage,
+		useProto: true,
+		integrationTest: &integrationTest{
+			isPlugin: true,
+			envs: map[string]string{
+				"BESKARSTATIC_ADDR":                         "127.0.0.1:5300",
+				"BESKARSTATIC_GOSSIP_ADDR":                  "127.0.0.1:5301",
+				"BESKARSTATIC_STORAGE_FILESYSTEM_DIRECTORY": "/tmp/integration/beskar-static",
+			},
+		},
 	},
 }
 
@@ -131,18 +158,18 @@ func (b Build) Proto(ctx context.Context) error {
 }
 
 func (b Build) Beskar(ctx context.Context) error {
-	return b.build(ctx, beskarBinary)
+	return b.build(ctx, BeskarBinary)
 }
 
 func (b Build) Beskarctl(ctx context.Context) error {
-	return b.build(ctx, beskarctlBinary)
+	return b.build(ctx, BeskarctlBinary)
 }
 
 func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
-		mg.F(b.Plugin, beskarYUMBinary),
-		mg.F(b.Plugin, beskarStaticBinary),
+		mg.F(b.Plugin, BeskarYUMBinary),
+		mg.F(b.Plugin, BeskarStaticBinary),
 	)
 }
 
@@ -172,12 +199,12 @@ func (b Build) build(ctx context.Context, name string) error {
 		}
 	}
 
+	buildOpts, ok := getBuildOptions(ctx)
+
 	currentPlatform, err := getCurrentPlatform()
 	if err != nil {
 		return err
 	}
-
-	buildOpts, ok := getBuildOptions(ctx)
 
 	if !ok {
 		buildOpts = &buildOptions{
@@ -189,6 +216,17 @@ func (b Build) build(ctx context.Context, name string) error {
 		buildOpts.platforms = []dagger.Platform{
 			dagger.Platform(currentPlatform),
 		}
+	}
+
+	files, err := getGoFiles(filepath.Join("cmd", name))
+	if err != nil {
+		return err
+	}
+	changed, err := target.Path(filepath.Join("build/output", name), files...)
+	if err != nil {
+		return err
+	} else if !changed && !ok {
+		return nil
 	}
 
 	client := buildOpts.client

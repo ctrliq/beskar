@@ -46,11 +46,11 @@ func (p *Plugin) GetRepository(ctx context.Context, repository string) (properti
 	return p.repositoryManager.Get(ctx, repository).GetRepository(ctx)
 }
 
-func (p *Plugin) SyncRepository(ctx context.Context, repository string) (err error) {
+func (p *Plugin) SyncRepository(ctx context.Context, repository string, wait bool) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
-	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx)
+	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, wait)
 }
 
 func (p *Plugin) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *apiv1.SyncStatus, err error) {

@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/reference"
 	middleware "github.com/distribution/distribution/v3/registry/middleware/registry"
 	storagedriver "github.com/distribution/distribution/v3/registry/storage/driver"
+	"github.com/distribution/reference"
 	"github.com/mailgun/groupcache/v2"
 )
 

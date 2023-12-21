@@ -20,6 +20,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+var ErrNoEntryFound = errors.New("no entry found")
+
 type DB struct {
 	*sqlx.DB
 	sync.RWMutex
@@ -72,14 +74,15 @@ func (db *DB) Open(ctx context.Context) error {
 	}
 
 	key := filepath.Join(db.storage.Repository, db.storage.CompressedFilename)
-
-	dbDir := filepath.Dir(db.path)
-	if err := os.MkdirAll(dbDir, 0o700); err != nil {
-		return fmt.Errorf("while creating database directory %s: %w", dbDir, err)
-	}
+	migrate := false
 
 	_, err := os.Stat(db.path)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
+		dbDir := filepath.Dir(db.path)
+		if err := os.MkdirAll(dbDir, 0o700); err != nil {
+			return fmt.Errorf("while creating database directory %s: %w", dbDir, err)
+		}
+
 		remoteReader, err := db.storage.Bucket.NewReader(ctx, key, &blob.ReaderOptions{})
 		if err == nil {
 			defer remoteReader.Close()
@@ -88,6 +91,7 @@ func (db *DB) Open(ctx context.Context) error {
 				return fmt.Errorf("while pulling %s database: %w", db.name, err)
 			}
 		}
+		migrate = err != nil
 	} else if err != nil {
 		return err
 	}
@@ -97,6 +101,12 @@ func (db *DB) Open(ctx context.Context) error {
 		return fmt.Errorf("while opening %s database %s: %w", db.name, db.path, err)
 	}
 	db.SetMaxOpenConns(1)
+
+	if migrate {
+		if err := db.migrate(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

@@ -4,6 +4,7 @@
 package orasrpm
 
 import (
+	"bytes"
 	"crypto/md5" //nolint:gosec
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.ciq.dev/beskar/pkg/ioutil"
 	"go.ciq.dev/beskar/pkg/oras"
 )
 
@@ -44,10 +46,13 @@ type RPMPuller struct {
 	writer io.Writer
 }
 
+// Reference returns the reference for the puller.
 func (rp *RPMPuller) Reference() name.Reference {
 	return rp.ref
 }
 
+// IndexManifest returns the manifest digest corresponding
+// to the current architecture.
 func (rp *RPMPuller) IndexManifest(index *v1.IndexManifest) *v1.Hash {
 	for _, manifest := range index.Manifests {
 		platform := manifest.Platform
@@ -66,10 +71,12 @@ func (rp *RPMPuller) IndexManifest(index *v1.IndexManifest) *v1.Hash {
 	return &index.Manifests[0].Digest
 }
 
+// RawConfig sets the raw config, ignored for RPM.
 func (rp *RPMPuller) RawConfig(_ []byte) error {
 	return nil
 }
 
+// Config validates the config mediatype.
 func (rp *RPMPuller) Config(config v1.Descriptor) error {
 	if config.MediaType != RPMConfigType {
 		return ErrNoRPMConfig
@@ -77,6 +84,7 @@ func (rp *RPMPuller) Config(config v1.Descriptor) error {
 	return nil
 }
 
+// Layers copy layers to the pull writer.
 func (rp *RPMPuller) Layers(layers []v1.Layer) error {
 	for _, l := range layers {
 		mt, err := l.MediaType()
@@ -101,7 +109,8 @@ func (rp *RPMPuller) Layers(layers []v1.Layer) error {
 	return fmt.Errorf("no RPM layer found for %s", rp.ref.Name())
 }
 
-func NewRPMPusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
+// RPMReferenceLayer returns the reference and the layer options for a RPM package.
+func RPMReferenceLayer(r io.Reader, repo string, opts ...name.Option) (name.Reference, []oras.LayerOption, error) {
 	if !strings.HasPrefix(repo, "artifacts/") {
 		if !strings.HasPrefix(repo, "yum/") {
 			repo = filepath.Join("artifacts", "yum", repo)
@@ -110,15 +119,9 @@ func NewRPMPusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
 		}
 	}
 
-	rpmFile, err := os.Open(path)
+	pkg, err := rpm.Read(r)
 	if err != nil {
-		return nil, fmt.Errorf("while opening %s: %w", path, err)
-	}
-	defer rpmFile.Close()
-
-	pkg, err := rpm.Read(rpmFile)
-	if err != nil {
-		return nil, fmt.Errorf("while reading %s metadata: %w", path, err)
+		return nil, nil, fmt.Errorf("while reading RPM metadata: %w", err)
 	}
 
 	arch := pkg.Architecture()
@@ -133,40 +136,75 @@ func NewRPMPusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
 	rawRef := filepath.Join(repo, "packages:"+pkgTag)
 	ref, err := name.ParseReference(rawRef, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("while parsing reference %s: %w", rawRef, err)
+		return nil, nil, fmt.Errorf("while parsing reference %s: %w", rawRef, err)
+	}
+
+	return ref, DefaultRPMLayerOptions(rpmName, arch), nil
+}
+
+// NewRPMPuller returns a pusher instance to push a local RPM package.
+func NewRPMPusher(path, repo string, opts ...name.Option) (oras.Pusher, error) {
+	rpmFile, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("while opening %s: %w", path, err)
+	}
+	defer rpmFile.Close()
+
+	ref, rpmLayerOptions, err := RPMReferenceLayer(rpmFile, repo, opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	return oras.NewGenericPusher(
 		ref,
 		oras.NewManifestConfig(RPMConfigType, nil),
-		NewRPMLayer(path, DefaultRPMLayerOptions(rpmName, arch)...),
+		oras.NewLocalFileLayer(path, rpmLayerOptions...),
 	), nil
 }
 
-func DefaultRPMLayerOptions(rpmName, arch string) []oras.LocalFileLayerOption {
-	return []oras.LocalFileLayerOption{
-		oras.WithLocalFileLayerPlatform(
+type fullStream struct {
+	io.Reader
+}
+
+func (fs *fullStream) Read(p []byte) (int, error) {
+	return io.ReadFull(fs.Reader, p)
+}
+
+// NewRPMStreamPusher returns a pusher instance to push a RPM package from a stream.
+func NewRPMStreamPusher(stream io.Reader, repo string, opts ...name.Option) (oras.Pusher, string, error) {
+	buf := new(bytes.Buffer)
+
+	streamReader := io.TeeReader(&fullStream{stream}, buf)
+
+	ref, rpmLayerOptions, err := RPMReferenceLayer(streamReader, repo, opts...)
+	if err != nil {
+		return nil, "", err
+	}
+
+	streamLayer := oras.NewStreamLayer(
+		ioutil.MultiReaderCloser(buf, stream),
+		rpmLayerOptions...,
+	)
+
+	return oras.NewGenericPusher(
+		ref,
+		oras.NewManifestConfig(RPMConfigType, nil),
+		streamLayer,
+	), streamLayer.Annotations()[imagespec.AnnotationTitle], nil
+}
+
+// DefaultRPMLayerOptions returns the default layer options for a RPM package.
+func DefaultRPMLayerOptions(rpmName, arch string) []oras.LayerOption {
+	return []oras.LayerOption{
+		oras.WithLayerPlatform(
 			&v1.Platform{
 				Architecture: arch,
 				OS:           "linux",
 			},
 		),
-		oras.WithLocalFileLayerAnnotations(map[string]string{
+		oras.WithLayerAnnotations(map[string]string{
 			imagespec.AnnotationTitle: rpmName,
 		}),
-	}
-}
-
-// rpmLayer defines an OCI layer descriptor associated to a RPM package.
-type rpmLayer struct {
-	*oras.LocalFileLayer
-}
-
-// NewRPMLayer returns an OCI layer descriptor for the corresponding
-// RPM package.
-func NewRPMLayer(path string, options ...oras.LocalFileLayerOption) oras.Layer {
-	options = append(options, oras.WithLocalFileLayerMediaType(RPMPackageLayerType))
-	return &rpmLayer{
-		LocalFileLayer: oras.NewLocalFileLayer(path, options...),
+		oras.WithLayerMediaType(RPMPackageLayerType),
 	}
 }

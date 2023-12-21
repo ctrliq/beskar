@@ -11,9 +11,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/reference"
+	"github.com/distribution/reference"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	regtypes "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/open-policy-agent/opa/ast"
@@ -128,6 +129,22 @@ var ociBlobDigestBuiltin = rego.Function3(
 	},
 )
 
+type bodyCloser struct {
+	io.Reader
+	closeFn func() error
+}
+
+func (bc bodyCloser) Close() error {
+	return bc.closeFn()
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		buffer := make([]byte, 8192)
+		return &buffer
+	},
+}
+
 var requestBodyBuiltin = rego.FunctionDyn(
 	&rego.Function{
 		Name:             "request.body",
@@ -149,14 +166,14 @@ var requestBodyBuiltin = rego.FunctionDyn(
 		}()
 
 		if funcContext.req.Body != nil && funcContext.req.Body != http.NoBody {
-			buf := make([]byte, 8192)
+			buf := bufferPool.Get().(*[]byte)
 
-			n, err := io.ReadAtLeast(funcContext.req.Body, buf, 1)
+			n, err := io.ReadAtLeast(funcContext.req.Body, *buf, 1)
 			if err != nil {
 				return nil, fmt.Errorf("empty body request")
 			}
 
-			bodyReader := bytes.NewReader(buf[:n])
+			bodyReader := bytes.NewReader((*buf)[:n])
 
 			v, err := ast.ValueFromReader(bodyReader)
 			if err != nil {
@@ -165,7 +182,15 @@ var requestBodyBuiltin = rego.FunctionDyn(
 
 			_, _ = bodyReader.Seek(0, io.SeekStart)
 
-			funcContext.req.Body = io.NopCloser(bodyReader)
+			originalBody := funcContext.req.Body
+
+			funcContext.req.Body = &bodyCloser{
+				Reader: bodyReader,
+				closeFn: func() error {
+					defer bufferPool.Put(buf)
+					return originalBody.Close()
+				},
+			}
 
 			return ast.NewTerm(v), nil
 		}

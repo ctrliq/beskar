@@ -49,7 +49,7 @@ var decompressors = []struct {
 type HashBuffer struct {
 	hash.Hash
 	buffer    *bytes.Buffer
-	bytesRead int
+	bytesRead int64
 }
 
 func NewHashBuffer(h hash.Hash, buffer *bytes.Buffer) *HashBuffer {
@@ -64,7 +64,7 @@ func (hb *HashBuffer) Write(p []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	hb.bytesRead += n
+	hb.bytesRead += int64(n)
 	if hb.buffer != nil {
 		if _, err := hb.buffer.Write(p); err != nil {
 			return n, err
@@ -73,7 +73,7 @@ func (hb *HashBuffer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (hb *HashBuffer) BytesRead() int {
+func (hb *HashBuffer) BytesRead() int64 {
 	return hb.bytesRead
 }
 

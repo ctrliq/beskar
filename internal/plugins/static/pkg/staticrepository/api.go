@@ -5,6 +5,7 @@ package staticrepository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"github.com/hashicorp/go-multierror"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticdb"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/static/api/v1"
 	"golang.org/x/sync/semaphore"
@@ -137,9 +139,10 @@ func (h *Handler) RemoveRepositoryFile(ctx context.Context, tag string) (err err
 
 	file, err := db.GetFileByTag(ctx, tag)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with tag %s not found", tag))
+		}
 		return werror.Wrap(gcode.ErrInternal, err)
-	} else if file.Tag == "" {
-		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with tag %s not found", tag))
 	} else if err := h.removeRepositoryFile(ctx, file); err != nil {
 		return werror.Wrap(gcode.ErrInternal, err)
 	}
@@ -160,9 +163,10 @@ func (h *Handler) GetRepositoryFileByTag(ctx context.Context, tag string) (repos
 
 	file, err := db.GetFileByTag(ctx, tag)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with tag %s not found", tag))
+		}
 		return nil, werror.Wrap(gcode.ErrInternal, err)
-	} else if file.Tag == "" {
-		return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with tag %s not found", tag))
 	}
 
 	return toRepositoryFileAPI(file), nil
@@ -181,9 +185,10 @@ func (h *Handler) GetRepositoryFileByName(ctx context.Context, name string) (rep
 
 	file, err := db.GetFileByName(ctx, name)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrNoEntryFound) {
+			return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with name %s not found", name))
+		}
 		return nil, werror.Wrap(gcode.ErrInternal, err)
-	} else if file.Tag == "" {
-		return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("file with name %s not found", name))
 	}
 
 	return toRepositoryFileAPI(file), nil
