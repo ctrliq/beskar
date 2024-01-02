@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/reference"
+	"github.com/distribution/reference"
 	"github.com/mailgun/groupcache/v2"
 	"github.com/opencontainers/go-digest"
 )

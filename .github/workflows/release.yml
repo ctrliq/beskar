@@ -11,19 +11,32 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Run linters
         run: ./scripts/mage lint:all
 
-  release-beskar:
-    name: release beskar
-    needs: lint
+  tests:
+    name: tests
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
+      - uses: actions/checkout@v3
+      - name: Run unit tests
+        run: ./scripts/mage test:unit
+      - name: Run integration tests
+        run: ./scripts/mage test:integration
+
+  release-beskar:
+    name: release beskar
+    needs: [lint, tests]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Release beskar image
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
@@ -32,12 +45,12 @@ jobs:
 
   release-beskar-yum:
     name: release beskar-yum
-    needs: lint
+    needs: [lint, tests]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Release beskar-yum image
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-yum:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
@@ -46,12 +59,12 @@ jobs:
 
   release-beskar-static:
     name: release beskar-static
-    needs: lint
+    needs: [lint, tests]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Release beskar-static image
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-static:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"

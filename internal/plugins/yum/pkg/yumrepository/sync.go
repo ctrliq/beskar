@@ -5,6 +5,7 @@ package yumrepository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/hashicorp/go-multierror"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.ciq.dev/beskar/internal/pkg/sqlite"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/mirror"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumdb"
 	"go.ciq.dev/beskar/pkg/oras"
@@ -155,8 +157,10 @@ func (h *Handler) repositorySync(ctx context.Context) (errFn error) {
 
 			pkg, err := repoDB.GetPackageByTag(dbCtx, pkgTag)
 			if err != nil {
-				h.logger.Error("package database by tag", "package", path, "tag", pkgTag, "error", err.Error())
-				return fmt.Errorf("package %s database by tag: %w", path, err)
+				if !errors.Is(err, sqlite.ErrNoEntryFound) {
+					h.logger.Error("package database by tag", "package", path, "tag", pkgTag, "error", err.Error())
+					return fmt.Errorf("package %s database by tag: %w", path, err)
+				}
 			} else if pkg.ID != "" {
 				// ensure to not delete an overridden package
 				packageMutex.Lock()

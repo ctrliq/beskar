@@ -251,6 +251,7 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 
 	oas2.AddDefinition(defs, "SyncRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
+		Wait       bool   `json:"wait"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 200, (&SyncRepositoryResponse{}).Body())
 

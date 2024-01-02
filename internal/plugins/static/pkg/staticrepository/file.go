@@ -6,6 +6,7 @@ package staticrepository
 import (
 	"context"
 	"crypto/md5" //nolint:gosec
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -40,9 +41,12 @@ func (h *Handler) processFileManifest(ctx context.Context, fileManifest *v1.Mani
 		}
 	}()
 
+	//nolint:gosec
+	s := md5.Sum([]byte(fileName))
+	tag := hex.EncodeToString(s[:])
+
 	repositoryFile := &staticdb.RepositoryFile{
-		//nolint:gosec
-		Tag:        fmt.Sprintf("%x", md5.Sum([]byte(fileName))),
+		Tag:        tag,
 		ID:         fileLayer.Digest.Hex,
 		Name:       fileName,
 		UploadTime: time.Now().UTC().Unix(),

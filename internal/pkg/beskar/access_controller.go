@@ -4,12 +4,10 @@
 package beskar
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/registry/auth"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -49,12 +47,7 @@ func newAccessController(hashedHostname string) auth.InitFunc {
 
 // Authorized simply checks for the existence of the authorization header,
 // responding with a bearer challenge if it doesn't exist.
-func (ac *accessController) Authorized(ctx context.Context, accessRecords ...auth.Access) (context.Context, error) {
-	req, err := dcontext.GetRequest(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (ac *accessController) Authorized(req *http.Request, accessRecords ...auth.Access) (*auth.Grant, error) {
 	requireAuthentication := false
 
 	for _, record := range accessRecords {
@@ -75,9 +68,12 @@ func (ac *accessController) Authorized(ctx context.Context, accessRecords ...aut
 	}
 
 	if !requireAuthentication {
-		return ctx, nil
-	} else if req.TLS != nil && req.TLS.ServerName == ac.hashedHostname {
-		return ctx, nil
+		return &auth.Grant{}, nil
+	} else if req.TLS != nil {
+		isPlugin, ok := req.Context().Value(&serverPluginContextKey).(bool)
+		if ok && isPlugin {
+			return &auth.Grant{}, nil
+		}
 	}
 
 	username, password, ok := req.BasicAuth()
@@ -88,10 +84,10 @@ func (ac *accessController) Authorized(ctx context.Context, accessRecords ...aut
 	}
 
 	if err := bcrypt.CompareHashAndPassword(ac.hashPassword, []byte(password)); err != nil {
-		return ctx, auth.ErrAuthenticationFailure
+		return nil, auth.ErrAuthenticationFailure
 	}
 
-	return auth.WithUser(ctx, auth.UserInfo{Name: username}), nil
+	return &auth.Grant{User: auth.UserInfo{Name: username}}, nil
 }
 
 type challenge struct {

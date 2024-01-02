@@ -1,0 +1,119 @@
+vault-rocky-8.3-ha-debug:
+  # source https://dl.rockylinux.org/vault/rocky/8.3/HighAvailability/x86_64/debug/tree/
+  local-path: testdata/vault-rocky-8.3-ha-debug
+  url: http://127.0.0.1:8080/vault-rocky-8.3-ha-debug/Packages
+  mirror-url: http://127.0.0.1:8080/vault-rocky-8.3-ha-debug
+  gpgkey: |
+    -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+    mQINBGAofzYBEAC6yS1azw6f3wmaVd//3aSy6O2c9+jeetulRQvg2LvhRRS1eNqp
+    /x9tbBhfohu/tlDkGpYHV7diePgMml9SZDy1sKlI3tDhx6GZ3xwF0fd1vWBZpmNk
+    D9gRkUmYBeLotmcXQZ8ZpWLicosFtDpJEYpLUhuIgTKwt4gxJrHvkWsGQiBkJxKD
+    u3/RlL4IYA3Ot9iuCBflc91EyAw1Yj0gKcDzbOqjvlGtS3ASXgxPqSfU0uLC9USF
+    uKDnP2tcnlKKGfj0u6VkqISliSuRAzjlKho9Meond+mMIFOTT6qp4xyu+9Dj3IjZ
+    IC6rBXRU3xi8z0qYptoFZ6hx70NV5u+0XUzDMXdjQ5S859RYJKijiwmfMC7gZQAf
+    OkdOcicNzen/TwD/slhiCDssHBNEe86Wwu5kmDoCri7GJlYOlWU42Xi0o1JkVltN
+    D8ZId+EBDIms7ugSwGOVSxyZs43q2IAfFYCRtyKHFlgHBRe9/KTWPUrnsfKxGJgC
+    Do3Yb63/IYTvfTJptVfhQtL1AhEAeF1I+buVoJRmBEyYKD9BdU4xQN39VrZKziO3
+    hDIGng/eK6PaPhUdq6XqvmnsZ2h+KVbyoj4cTo2gKCB2XA7O2HLQsuGduHzYKNjf
+    QR9j0djjwTrsvGvzfEzchP19723vYf7GdcLvqtPqzpxSX2FNARpCGXBw9wARAQAB
+    tDNSZWxlYXNlIEVuZ2luZWVyaW5nIDxpbmZyYXN0cnVjdHVyZUByb2NreWxpbnV4
+    Lm9yZz6JAk4EEwEIADgWIQRwUcRwqSn0VM6+N7cVr12sbXRaYAUCYCh/NgIbDwUL
+    CQgHAgYVCgkICwIEFgIDAQIeAQIXgAAKCRAVr12sbXRaYLFmEACSMvoO1FDdyAbu
+    1m6xEzDhs7FgnZeQNzLZECv2j+ggFSJXezlNVOZ5I1I8umBan2ywfKQD8M+IjmrW
+    k9/7h9i54t8RS/RN7KNo7ECGnKXqXDPzBBTs1Gwo1WzltAoaDKUfXqQ4oJ4aCP/q
+    /XPVWEzgpJO1XEezvCq8VXisutyDiXEjjMIeBczxb1hbamQX+jLTIQ1MDJ4Zo1YP
+    zlUqrHW434XC2b1/WbSaylq8Wk9cksca5J+g3FqTlgiWozyy0uxygIRjb6iTzKXk
+    V7SYxeXp3hNTuoUgiFkjh5/0yKWCwx7aQqlHar9GjpxmBDAO0kzOlgtTw//EqTwR
+    KnYZLig9FW0PhwvZJUigr0cvs/XXTTb77z/i/dfHkrjVTTYenNyXogPtTtSyxqca
+    61fbPf0B/S3N43PW8URXBRS0sykpX4SxKu+PwKCqf+OJ7hMEVAapqzTt1q9T7zyB
+    QwvCVx8s7WWvXbs2d6ZUrArklgjHoHQcdxJKdhuRmD34AuXWCLW+gH8rJWZpuNl3
+    +WsPZX4PvjKDgMw6YMcV7zhWX6c0SevKtzt7WP3XoKDuPhK1PMGJQqQ7spegGB+5
+    DZvsJS48Ip0S45Qfmj82ibXaCBJHTNZE8Zs+rdTjQ9DS5qvzRA1sRA1dBb/7OLYE
+    JmeWf4VZyebm+gc50szsg6Ut2yT8hw==
+    =AiP8
+    -----END PGP PUBLIC KEY BLOCK-----
+  files:
+    booth-core-debuginfo-1.0-6.ac1d34c.git.el8.2.x86_64.rpm:
+      sha256: 70cd3f8f09bfd30bb423d0101c02389d1be326706c244829815f87b94fa875ff
+      size: 210964
+    booth-debugsource-1.0-6.ac1d34c.git.el8.2.x86_64.rpm:
+      sha256: 4c175312dd8cbb81e8f9672bd49cd73b01918c475b3594c2f078caf57cb24022
+      size: 69532
+    clufter-bin-debuginfo-0.77.1-5.el8.x86_64.rpm:
+      sha256: c83e47640091e3aed88e27d0ea30f7d3060d7dea2f7746055bc05f3949baca5c
+      size: 62316
+    clufter-debugsource-0.77.1-5.el8.x86_64.rpm:
+      sha256: 83f9678740caa2890fb8f45b4fd4972cd0b7f1c7dbf910a76628befc2e26c39e
+      size: 35084
+    corosync-qdevice-debuginfo-3.0.0-4.el8.x86_64.rpm:
+      sha256: 5cb1ac43171c08fd7578e9ad281f1dc4576ab24775ac2db3c84c3be8661b7455
+      size: 341300
+    corosync-qdevice-debugsource-3.0.0-4.el8.x86_64.rpm:
+      sha256: 5d539d514f4659e40dd50a8357675ba30738c9138b829cf9e7b4eef7a71d425b
+      size: 131324
+    corosync-qnetd-debuginfo-3.0.0-4.el8.x86_64.rpm:
+      sha256: 8db79297a0371ae48cc4e108093552498f26d246c18fe98f427fd51184050b87
+      size: 177000
+    fence-agents-aliyun-debuginfo-4.2.1-53.el8.2.x86_64.rpm:
+      sha256: f1009861428b7bd0d32c0bf819f3d7981fffc125df8da98a002eca15574c8871
+      size: 237948
+    kronosnet-debugsource-1.16-1.el8.i686.rpm:
+      sha256: 9e192376f8c7d2a67695d5b1fd429285b1f74100b08198ce4160f2c5ef1f73d0
+      size: 155436
+    kronosnet-debugsource-1.16-1.el8.x86_64.rpm:
+      sha256: 32f1d6f2ba884162f3261af79090989d46aa7cc985e0eb4bed7be6476b62b076
+      size: 155404
+    libknet1-compress-bzip2-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 005e7097f22afd944967552da719d2256015ab1e70197840f1154a5efdd6c2c5
+      size: 51508
+    libknet1-compress-lz4-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 7a4500bba81702deaf594ed54fe8cb068261078ff0fa3fa0ff69d5d12c9da7e9
+      size: 59564
+    libknet1-compress-lzma-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 097825da7fc7950520e25190a0ccf6beb7697a77c674f72290be4c1bc2bdc9a5
+      size: 52548
+    libknet1-compress-lzo2-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 1e8760bbb532b525f8d69aa16d51786dad8eec38060040d3c4ddbb58ce3c4e2e
+      size: 56688
+    libknet1-compress-zlib-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 9a13fad23268f6b78cee48475a82593b8f7c997997f6597d63750d74e6a25584
+      size: 50700
+    libknet1-crypto-nss-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 286875af24122e3589cb1d21b8da40895defbc658294c7ebd29c340348c3aad9
+      size: 96032
+    libknet1-crypto-openssl-plugin-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: 2b1e35650fcc9f984396df045811196846317ae53c5aeb4b7a34814dc587db2a
+      size: 132076
+    libknet1-debuginfo-1.16-1.el8.i686.rpm:
+      sha256: 7c162626f92f11c8574d7c861bee6d4d3c2966d1472f187b63e509026339123a
+      size: 216916
+    libknet1-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: bda5e228bc2bcaa0a8d88a6551d7836ece0d4de4a2b25d3462dbb172c9256bcb
+      size: 234972
+    libnozzle1-debuginfo-1.16-1.el8.i686.rpm:
+      sha256: b55e8c166d05dd96a2d0fc9314ce8a5547e1c8225cbbb350be1f557b9071c8bc
+      size: 82548
+    libnozzle1-debuginfo-1.16-1.el8.x86_64.rpm:
+      sha256: af2f603c217c654bded49830fdf130862ecd7171888f56ac062e7ab90b47dbba
+      size: 84260
+    pacemaker-cli-debuginfo-2.0.4-6.el8.2.x86_64.rpm:
+      sha256: 85932aead5452a8879daebe033671a7f41752c93a4609596641ec0d756180c4c
+      size: 357552
+    pacemaker-remote-debuginfo-2.0.4-6.el8.2.x86_64.rpm:
+      sha256: fe30621d95d117e3ed749d0bd5ae41c52cd41e0853c08fdd6eacde2dc453e69a
+      size: 89868
+    resource-agents-aliyun-debuginfo-4.1.1-68.el8.2.x86_64.rpm:
+      sha256: dc6e59602f319178eaa5d2ea268d206353db85ddc734883b8d6072752cd44f06
+      size: 253352
+    resource-agents-debuginfo-4.1.1-68.el8.2.x86_64.rpm:
+      sha256: 5eb1d81a540c06bba59cdfa98e8071eeedb229f5c664487e2260d48e515e2e6c
+      size: 169232
+    resource-agents-debugsource-4.1.1-68.el8.2.x86_64.rpm:
+      sha256: a86631e7a4006c7a017b264fecc5b74564586400b31a11e86eece4c6a33b2320
+      size: 171220
+    spausedd-debuginfo-3.0.3-4.el8.x86_64.rpm:
+      sha256: 313ea57acd22cb4f7bc269fb86b1e9a164a85ce88a5f69bb5438f3732a5e082b
+      size: 42660
+
+

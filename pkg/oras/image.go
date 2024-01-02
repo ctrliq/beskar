@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 )
 
@@ -27,12 +28,14 @@ var _ v1.Image = &Image{}
 type Image struct {
 	m sync.RWMutex
 
+	streamLayers []*StreamLayer
+
 	layers    map[string]v1.Layer
 	manifest  *v1.Manifest
 	rawConfig []byte
 }
 
-// NewImage returns a Image instance for uploading SIF images
+// NewImage returns a Image instance for uploading artifacts
 // to OCI registries.
 func NewImage() *Image {
 	return &Image{
@@ -59,8 +62,22 @@ func (i *Image) AddConfig(mt types.MediaType, rawConfig []byte) error {
 	return nil
 }
 
-// AddSIFLayer adds a blob layer to the image manifest.
+// AddLayer adds a blob layer to the image manifest.
 func (i *Image) AddLayer(layer Layer) error {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	if sl, ok := layer.(*StreamLayer); ok {
+		i.streamLayers = append(i.streamLayers, sl)
+		return nil
+	}
+
+	return i.addLayer(layer)
+}
+
+// addLayer adds the layer to the image manifest, must
+// be wrapped in a write lock section.
+func (i *Image) addLayer(layer Layer) error {
 	digest, err := layer.Digest()
 	if err != nil {
 		return err
@@ -72,7 +89,6 @@ func (i *Image) AddLayer(layer Layer) error {
 		return err
 	}
 
-	i.m.Lock()
 	i.layers[digest.String()] = layer
 	i.manifest.Layers = append(i.manifest.Layers, v1.Descriptor{
 		MediaType:   mt,
@@ -81,20 +97,24 @@ func (i *Image) AddLayer(layer Layer) error {
 		Annotations: layer.Annotations(),
 		Platform:    layer.Platform(),
 	})
-	i.m.Unlock()
 
 	return nil
 }
 
 // Layers returns a unordered collection of SIF file.
 func (i *Image) Layers() ([]v1.Layer, error) {
-	var layers []v1.Layer
-
 	i.m.RLock()
+	defer i.m.RUnlock()
+
+	layers := make([]v1.Layer, 0, len(i.layers)+len(i.streamLayers))
+
+	// TODO: consider layer ordering
 	for _, sl := range i.layers {
 		layers = append(layers, sl)
 	}
-	i.m.RUnlock()
+	for _, sl := range i.streamLayers {
+		layers = append(layers, sl)
+	}
 
 	return layers, nil
 }
@@ -131,6 +151,28 @@ func (i *Image) ConfigFile() (*v1.ConfigFile, error) {
 
 // Digest returns the sha256 of this image's manifest.
 func (i *Image) Digest() (v1.Hash, error) {
+	notComputed := false
+
+	i.m.Lock()
+
+	for j := len(i.streamLayers) - 1; j >= 0; j-- {
+		if i.streamLayers[j].digest.Hex == "" {
+			notComputed = true
+		} else {
+			if err := i.addLayer(i.streamLayers[j]); err != nil {
+				i.m.Unlock()
+				return v1.Hash{}, err
+			}
+			i.streamLayers = append(i.streamLayers[:j], i.streamLayers[j+1:]...)
+		}
+	}
+
+	i.m.Unlock()
+
+	if notComputed {
+		return v1.Hash{}, stream.ErrNotComputed
+	}
+
 	b, err := i.RawManifest()
 	if err != nil {
 		return v1.Hash{}, fmt.Errorf("failed to get image sha manifest: %w", err)
@@ -143,6 +185,7 @@ func (i *Image) Digest() (v1.Hash, error) {
 func (i *Image) Manifest() (*v1.Manifest, error) {
 	i.m.RLock()
 	defer i.m.RUnlock()
+
 	return i.manifest, nil
 }
 
@@ -150,6 +193,7 @@ func (i *Image) Manifest() (*v1.Manifest, error) {
 func (i *Image) RawManifest() ([]byte, error) {
 	i.m.RLock()
 	defer i.m.RUnlock()
+
 	return json.Marshal(i.manifest)
 }
 

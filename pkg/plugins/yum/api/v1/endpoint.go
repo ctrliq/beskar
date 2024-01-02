@@ -391,6 +391,7 @@ func MakeEndpointOfRemoveRepositoryPackageByTag(s YUM) endpoint.Endpoint {
 
 type SyncRepositoryRequest struct {
 	Repository string `json:"repository"`
+	Wait       bool   `json:"wait"`
 }
 
 // ValidateSyncRepositoryRequest creates a validator for SyncRepositoryRequest.
@@ -417,6 +418,7 @@ func MakeEndpointOfSyncRepository(s YUM) endpoint.Endpoint {
 		err := s.SyncRepository(
 			ctx,
 			req.Repository,
+			req.Wait,
 		)
 		return &SyncRepositoryResponse{
 			Err: err,

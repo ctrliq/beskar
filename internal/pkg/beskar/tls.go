@@ -5,7 +5,6 @@
 package beskar
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -13,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/distribution/distribution/v3/configuration"
-	dcontext "github.com/distribution/distribution/v3/context"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -111,7 +110,7 @@ func nextProtos(config *configuration.Configuration) []string {
 }
 
 // serve runs the registry's HTTP server.
-func (br *Registry) getTLSConfig(ctx context.Context) (*tls.Config, error) {
+func (br *Registry) getTLSConfig(logger *logrus.Entry) (*tls.Config, error) {
 	var err error
 
 	config := br.beskarConfig.Registry
@@ -127,19 +126,19 @@ func (br *Registry) getTLSConfig(ctx context.Context) (*tls.Config, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown minimum TLS level '%s' specified for http.tls.minimumtls", config.HTTP.TLS.MinimumTLS)
 	}
-	dcontext.GetLogger(ctx).Infof("restricting TLS version to %s or higher", config.HTTP.TLS.MinimumTLS)
+	logger.Infof("restricting TLS version to %s or higher", config.HTTP.TLS.MinimumTLS)
 
 	var tlsCipherSuites []uint16
 	// configuring cipher suites are no longer supported after the tls1.3.
 	// (https://go.dev/blog/tls-cipher-suites)
 	if tlsMinVersion > tls.VersionTLS12 {
-		dcontext.GetLogger(ctx).Warnf("restricting TLS cipher suites to empty. Because configuring cipher suites is no longer supported in %s", config.HTTP.TLS.MinimumTLS)
+		logger.Warnf("restricting TLS cipher suites to empty. Because configuring cipher suites is no longer supported in %s", config.HTTP.TLS.MinimumTLS)
 	} else {
 		tlsCipherSuites, err = getCipherSuites(config.HTTP.TLS.CipherSuites)
 		if err != nil {
 			return nil, err
 		}
-		dcontext.GetLogger(ctx).Infof("restricting TLS cipher suites to: %s", strings.Join(getCipherSuiteNames(tlsCipherSuites), ","))
+		logger.Infof("restricting TLS cipher suites to: %s", strings.Join(getCipherSuiteNames(tlsCipherSuites), ","))
 	}
 
 	//nolint:gosec

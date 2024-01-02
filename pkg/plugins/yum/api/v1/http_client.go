@@ -550,7 +550,7 @@ func (c *HTTPClient) RemoveRepositoryPackageByTag(ctx context.Context, repositor
 	return nil
 }
 
-func (c *HTTPClient) SyncRepository(ctx context.Context, repository string) (err error) {
+func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, wait bool) (err error) {
 	codec := c.codecs.EncodeDecoder("SyncRepository")
 
 	path := "/repository/sync"
@@ -562,8 +562,10 @@ func (c *HTTPClient) SyncRepository(ctx context.Context, repository string) (err
 
 	reqBody := struct {
 		Repository string `json:"repository"`
+		Wait       bool   `json:"wait"`
 	}{
 		Repository: repository,
+		Wait:       wait,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
 	if err != nil {

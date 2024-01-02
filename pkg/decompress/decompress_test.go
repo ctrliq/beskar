@@ -79,7 +79,7 @@ func TestOpenFile(t *testing.T) {
 			compW, err := tt.writer(w)
 			require.NoError(t, err)
 
-			expectedOpenSize := len(expected)
+			expectedOpenSize := int64(len(expected))
 
 			if compW != nil {
 				_, err = compW.Write(expected)
@@ -104,7 +104,7 @@ func TestOpenFile(t *testing.T) {
 			require.Equal(t, expected, res)
 
 			require.Equal(t, tt.expectedHash, h.Hex())
-			require.Equal(t, int(fi.Size()), h.BytesRead())
+			require.Equal(t, fi.Size(), h.BytesRead())
 
 			require.Equal(t, tt.expectedOpenHash, oh.Hex())
 			require.Equal(t, expectedOpenSize, oh.BytesRead())

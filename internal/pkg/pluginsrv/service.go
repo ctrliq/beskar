@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi"
@@ -67,6 +69,7 @@ func Serve(ln net.Listener, service Service) (errFn error) {
 
 	server := http.Server{
 		Handler:           serviceConfig.Router,
+		ReadTimeout:       5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		BaseContext: func(net.Listener) context.Context {
 			return httpContext
@@ -291,12 +294,18 @@ func getBeskarTransport(caPEM *mtls.CAPEM, beskarMeta *gossip.BeskarMeta) (http.
 		return nil, fmt.Errorf("while generating beskar client mTLS configuration: %w", err)
 	}
 	//nolint:gosec
-	beskarTLSConfig.ServerName = fmt.Sprintf("%x", md5.Sum([]byte(beskarMeta.Hostname)))
+	s := md5.Sum([]byte(beskarMeta.Hostname))
+	beskarTLSConfig.ServerName = hex.EncodeToString(s[:])
 
 	beskarAddr := net.JoinHostPort(beskarMeta.Hostname, strconv.Itoa(int(beskarMeta.RegistryPort)))
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConnsPerHost = 16
+
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		// disable insecure connection to beskar
+		return nil, syscall.ECONNREFUSED
+	}
+
 	transport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		var tlsConfig *tls.Config
 

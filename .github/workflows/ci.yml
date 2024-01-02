@@ -9,10 +9,23 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Run linters
         run: ./scripts/mage lint:all
+
+  tests:
+    name: tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+      - uses: actions/checkout@v3
+      - name: Run unit tests
+        run: ./scripts/mage test:unit
+      - name: Run integration tests
+        run: ./scripts/mage test:integration
 
   build:
     name: build
@@ -20,7 +33,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21'
       - uses: actions/checkout@v3
       - name: Build binaries
         run: ./scripts/mage build:all
