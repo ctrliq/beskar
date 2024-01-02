@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ template "beskar-ostree.fullname" . }}
+rules:
+  - apiGroups:
+    - ''
+    resources:
+      - endpoints
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "beskar-ostree.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name | default (include "beskar-ostree.fullname" .) }}
+    apiGroup: ""
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ template "beskar-ostree.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,16 @@
+version: 1.0
+
+addr: 0.0.0.0:5200
+
+log:
+  level: debug
+  format: json
+
+profiling: true
+datadir: /tmp/beskar-ostree
+
+gossip:
+  addr: 0.0.0.0:5201
+  key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
+  peers:
+    - 127.0.0.1:5102

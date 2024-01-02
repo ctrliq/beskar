@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "beskar-ostree.fullname" . }}-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar-ostree.labels" . | nindent 4 }}
+data:
+  beskar-ostree.yaml: |-
+{{ toYaml .Values.configData | indent 4 }}

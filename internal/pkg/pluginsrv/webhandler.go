@@ -16,9 +16,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type webHandler[H repository.Handler] struct {
+type webHandler struct {
 	pluginInfo *pluginv1.Info
-	manager    *repository.Manager[H]
+	manager    *repository.Manager
 }
 
 func IsTLS(w http.ResponseWriter, r *http.Request) bool {
@@ -29,8 +29,19 @@ func IsTLS(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (wh *webHandler[H]) event(w http.ResponseWriter, r *http.Request) {
-	if !IsTLS(w, r) {
+// IsTLSMiddleware is a middleware that checks if the request is TLS. This is a convenience wrapper around IsTLS.
+func IsTLSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !IsTLS(w, r) {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (wh *webHandler) event(w http.ResponseWriter, r *http.Request) {
+	if wh.manager == nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -84,11 +95,7 @@ func (wh *webHandler[H]) event(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (wh *webHandler[H]) info(w http.ResponseWriter, r *http.Request) {
-	if !IsTLS(w, r) {
-		return
-	}
-
+func (wh *webHandler) info(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusNotImplemented)
 		return

@@ -58,10 +58,11 @@ type binaryConfig struct {
 }
 
 const (
-	BeskarBinary       = "beskar"
-	BeskarctlBinary    = "beskarctl"
-	BeskarYUMBinary    = "beskar-yum"
-	BeskarStaticBinary = "beskar-static"
+	beskarBinary       = "beskar"
+	beskarctlBinary    = "beskarctl"
+	beskarYUMBinary    = "beskar-yum"
+	beskarStaticBinary = "beskar-static"
+	beskarOSTreeBinary = "beskar-ostree"
 )
 
 var binaries = map[string]binaryConfig{
@@ -130,6 +131,18 @@ var binaries = map[string]binaryConfig{
 			},
 		},
 	},
+	beskarOSTreeBinary: {
+		configFiles: map[string]string{
+			"internal/plugins/ostree/pkg/config/default/beskar-ostree.yaml": "/etc/beskar/beskar-ostree.yaml",
+		},
+		genAPI: &genAPI{
+			path:          "pkg/plugins/ostree/api/v1",
+			filename:      "api.go",
+			interfaceName: "OSTree",
+		},
+		useProto:  true,
+		baseImage: "alpine:3.17",
+	},
 }
 
 type Build mg.Namespace
@@ -168,8 +181,9 @@ func (b Build) Beskarctl(ctx context.Context) error {
 func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
-		mg.F(b.Plugin, BeskarYUMBinary),
-		mg.F(b.Plugin, BeskarStaticBinary),
+		mg.F(b.Plugin, beskarYUMBinary),
+		mg.F(b.Plugin, beskarStaticBinary),
+		mg.F(b.Plugin, beskarOSTreeBinary),
 	)
 }
 

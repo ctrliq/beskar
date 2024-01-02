@@ -14,7 +14,6 @@ import (
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/static"
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/config"
-	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
 	"go.ciq.dev/beskar/pkg/sighandler"
 	"go.ciq.dev/beskar/pkg/version"
 )
@@ -47,7 +46,7 @@ func serve(beskarStaticCmd *flag.FlagSet) error {
 	}
 
 	go func() {
-		errCh <- pluginsrv.Serve[*staticrepository.Handler](ln, plugin)
+		errCh <- pluginsrv.Serve(ln, plugin)
 	}()
 
 	return wait(false)
