@@ -426,6 +426,45 @@ func MakeEndpointOfSyncRepository(s YUM) endpoint.Endpoint {
 	}
 }
 
+type SyncRepositoryWithURLRequest struct {
+	Repository string `json:"repository"`
+	MirrorURL  string `json:"mirror_url"`
+	Wait       bool   `json:"wait"`
+}
+
+// ValidateSyncRepositoryWithURLRequest creates a validator for SyncRepositoryWithURLRequest.
+func ValidateSyncRepositoryWithURLRequest(newSchema func(*SyncRepositoryWithURLRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*SyncRepositoryWithURLRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type SyncRepositoryWithURLResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *SyncRepositoryWithURLResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *SyncRepositoryWithURLResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfSyncRepositoryWithURL creates the endpoint for s.SyncRepositoryWithURL.
+func MakeEndpointOfSyncRepositoryWithURL(s YUM) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*SyncRepositoryWithURLRequest)
+		err := s.SyncRepositoryWithURL(
+			ctx,
+			req.Repository,
+			req.MirrorURL,
+			req.Wait,
+		)
+		return &SyncRepositoryWithURLResponse{
+			Err: err,
+		}, nil
+	}
+}
+
 type UpdateRepositoryRequest struct {
 	Repository string                `json:"repository"`
 	Properties *RepositoryProperties `json:"properties"`

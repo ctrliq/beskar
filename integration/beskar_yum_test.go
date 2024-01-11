@@ -247,6 +247,22 @@ var _ = Describe("Beskar YUM Plugin", func() {
 			Expect(status.EndTime).ToNot(BeEmpty())
 		})
 
+		It("Sync Repository With URL", func() {
+			err := beskarYUMClient().SyncRepositoryWithURL(context.Background(), repositoryAPIName, repo.AuthMirrorURL, true)
+			Expect(err).To(BeNil())
+		})
+
+		It("Sync Status", func() {
+			status, err := beskarYUMClient().GetRepositorySyncStatus(context.Background(), repositoryAPIName)
+			Expect(err).To(BeNil())
+			Expect(status.Syncing).To(BeFalse())
+			Expect(status.SyncError).To(BeEmpty())
+			Expect(status.SyncedPackages).To(Equal(len(repo.Files)))
+			Expect(status.TotalPackages).To(Equal(len(repo.Files)))
+			Expect(status.StartTime).ToNot(BeEmpty())
+			Expect(status.EndTime).ToNot(BeEmpty())
+		})
+
 		It("Access Repository Artifacts", func() {
 			for filename := range repo.Files {
 				info, ok := repo.Files[filename]

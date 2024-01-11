@@ -8,11 +8,12 @@ type File struct {
 }
 
 type Repository struct {
-	URL       string          `yaml:"url"`
-	LocalPath string          `yaml:"local-path"`
-	MirrorURL string          `yaml:"mirror-url"`
-	GPGKey    string          `yaml:"gpgkey"`
-	Files     map[string]File `yaml:"files"`
+	URL           string          `yaml:"url"`
+	LocalPath     string          `yaml:"local-path"`
+	MirrorURL     string          `yaml:"mirror-url"`
+	AuthMirrorURL string          `yaml:"auth-mirror-url"`
+	GPGKey        string          `yaml:"gpgkey"`
+	Files         map[string]File `yaml:"files"`
 }
 
 type Repositories map[string]Repository

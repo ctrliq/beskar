@@ -178,6 +178,20 @@ func NewHTTPRouter(svc YUM, codecs httpcodec.Codecs, opts ...httpoption.Option) 
 		),
 	)
 
+	codec = codecs.EncodeDecoder("SyncRepositoryWithURL")
+	validator = options.RequestValidator("SyncRepositoryWithURL")
+	r.Method(
+		"GET", "/repository/sync:url",
+		kithttp.NewServer(
+			MakeEndpointOfSyncRepositoryWithURL(svc),
+			decodeSyncRepositoryWithURLRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	codec = codecs.EncodeDecoder("UpdateRepository")
 	validator = options.RequestValidator("UpdateRepository")
 	r.Method(
@@ -358,6 +372,22 @@ func decodeRemoveRepositoryPackageByTagRequest(codec httpcodec.Codec, validator 
 func decodeSyncRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req SyncRepositoryRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeSyncRepositoryWithURLRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req SyncRepositoryWithURLRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err
