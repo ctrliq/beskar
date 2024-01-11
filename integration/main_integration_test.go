@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"syscall"
@@ -38,6 +39,17 @@ func TestSubstrateIntegration(t *testing.T) {
 	RunSpecs(t, "Beskar Integration Test Suite")
 }
 
+func auth(username, password string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || username != u || password != p {
+			http.Error(w, "401 unauthorized", http.StatusUnauthorized)
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 var _ = SynchronizedBeforeSuite(
 	// NOTE: This runs *only* on process #1 when run in parallel
 	func() []byte {
@@ -61,6 +73,19 @@ var _ = SynchronizedBeforeSuite(
 				fs := http.FileServer(http.Dir(repo.LocalPath))
 				pathPrefix := fmt.Sprintf("/%s/", name)
 				mux.Handle(pathPrefix, http.StripPrefix(pathPrefix, fs))
+
+				if repo.AuthMirrorURL != "" {
+					u, err := url.Parse(repo.AuthMirrorURL)
+					if err != nil {
+						continue
+					}
+
+					username := u.User.Username()
+					password, _ := u.User.Password()
+
+					pathPrefix := fmt.Sprintf("/auth/%s/", name)
+					mux.Handle(pathPrefix, auth(username, password, http.StripPrefix(pathPrefix, fs)))
+				}
 			}
 		}
 

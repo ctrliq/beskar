@@ -3,6 +3,7 @@ vault-rocky-8.3-ha-debug:
   local-path: testdata/vault-rocky-8.3-ha-debug
   url: http://127.0.0.1:8080/vault-rocky-8.3-ha-debug/Packages
   mirror-url: http://127.0.0.1:8080/vault-rocky-8.3-ha-debug
+  auth-mirror-url: http://test:test-password@127.0.0.1:8080/auth/vault-rocky-8.3-ha-debug
   gpgkey: |
     -----BEGIN PGP PUBLIC KEY BLOCK-----
 

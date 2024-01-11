@@ -115,6 +115,11 @@ type YUM interface { //nolint:interfacebloat
 	//kun:success statusCode=200
 	SyncRepository(ctx context.Context, repository string, wait bool) (err error)
 
+	// Sync YUM repository with an upstream repository using a specified URL.
+	//kun:op GET /repository/sync:url
+	//kun:success statusCode=200
+	SyncRepositoryWithURL(ctx context.Context, repository, mirrorURL string, wait bool) (err error)
+
 	// Get YUM repository sync status.
 	//kun:op GET /repository/sync:status
 	//kun:success statusCode=200
