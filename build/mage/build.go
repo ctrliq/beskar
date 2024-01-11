@@ -55,14 +55,16 @@ type binaryConfig struct {
 	buildTags         []string
 	baseImage         string
 	integrationTest   *integrationTest
+	buildEnv          map[string]string
+	buildExecStmts    [][]string
 }
 
 const (
-	beskarBinary       = "beskar"
-	beskarctlBinary    = "beskarctl"
-	beskarYUMBinary    = "beskar-yum"
-	beskarStaticBinary = "beskar-static"
-	beskarOSTreeBinary = "beskar-ostree"
+	BeskarBinary       = "beskar"
+	BeskarctlBinary    = "beskarctl"
+	BeskarYUMBinary    = "beskar-yum"
+	BeskarStaticBinary = "beskar-static"
+	BeskarOSTreeBinary = "beskar-ostree"
 )
 
 var binaries = map[string]binaryConfig{
@@ -131,7 +133,7 @@ var binaries = map[string]binaryConfig{
 			},
 		},
 	},
-	beskarOSTreeBinary: {
+	BeskarOSTreeBinary: {
 		configFiles: map[string]string{
 			"internal/plugins/ostree/pkg/config/default/beskar-ostree.yaml": "/etc/beskar/beskar-ostree.yaml",
 		},
@@ -140,8 +142,30 @@ var binaries = map[string]binaryConfig{
 			filename:      "api.go",
 			interfaceName: "OSTree",
 		},
-		useProto:  true,
-		baseImage: "alpine:3.17",
+		useProto: true,
+		execStmts: [][]string{
+			{
+				"apk", "add", "ostree", "ostree-dev",
+			},
+		},
+		buildExecStmts: [][]string{
+			{
+				"apk", "add", "build-base",
+			},
+			{
+				"apk", "add", "ostree", "ostree-dev",
+			},
+		},
+		buildEnv: map[string]string{
+			"CGO_ENABLED": "1",
+		},
+		excludedPlatforms: map[dagger.Platform]struct{}{
+			"linux/arm64":   {},
+			"linux/s390x":   {},
+			"linux/ppc64le": {},
+			"linux/arm/v6":  {},
+			"linux/arm/v7":  {},
+		},
 	},
 }
 
@@ -181,9 +205,9 @@ func (b Build) Beskarctl(ctx context.Context) error {
 func (b Build) Plugins(ctx context.Context) {
 	mg.CtxDeps(
 		ctx,
-		mg.F(b.Plugin, beskarYUMBinary),
-		mg.F(b.Plugin, beskarStaticBinary),
-		mg.F(b.Plugin, beskarOSTreeBinary),
+		mg.F(b.Plugin, BeskarYUMBinary),
+		mg.F(b.Plugin, BeskarStaticBinary),
+		mg.F(b.Plugin, BeskarOSTreeBinary),
 	)
 }
 
@@ -286,6 +310,14 @@ func (b Build) build(ctx context.Context, name string) error {
 
 		for key, value := range envs {
 			golang = golang.WithEnvVariable(key, value)
+		}
+
+		for key, value := range binaryConfig.buildEnv {
+			golang = golang.WithEnvVariable(key, value)
+		}
+
+		for _, execStmt := range binaryConfig.buildExecStmts {
+			golang = golang.WithExec(execStmt)
 		}
 
 		path := filepath.Join("/output", binary)

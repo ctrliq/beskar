@@ -6,9 +6,12 @@ package repository
 import (
 	"context"
 	"errors"
+	"go.ciq.dev/beskar/internal/pkg/gossip"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,10 +28,19 @@ type HandlerParams struct {
 	RemoteOptions []remote.Option
 	NameOptions   []name.Option
 	remove        func(string)
+	BeskarMeta    *gossip.BeskarMeta
 }
 
 func (hp HandlerParams) Remove(repository string) {
 	hp.remove(repository)
+}
+
+func (hp HandlerParams) GetBeskarServiceHostPort() string {
+	return net.JoinHostPort(hp.BeskarMeta.Hostname, strconv.Itoa(int(hp.BeskarMeta.ServicePort)))
+}
+
+func (hp HandlerParams) GetBeskarRegistryHostPort() string {
+	return net.JoinHostPort(hp.BeskarMeta.Hostname, strconv.Itoa(int(hp.BeskarMeta.RegistryPort)))
 }
 
 // Handler - Interface for handling events for a repository.

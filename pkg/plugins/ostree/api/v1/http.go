@@ -24,13 +24,69 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 	var validator httpoption.Validator
 	var kitOptions []kithttp.ServerOption
 
-	codec = codecs.EncodeDecoder("MirrorRepository")
-	validator = options.RequestValidator("MirrorRepository")
+	codec = codecs.EncodeDecoder("AddRemote")
+	validator = options.RequestValidator("AddRemote")
 	r.Method(
-		"POST", "/repository/mirror",
+		"POST", "/repository/remote:add",
 		kithttp.NewServer(
-			MakeEndpointOfMirrorRepository(svc),
-			decodeMirrorRepositoryRequest(codec, validator),
+			MakeEndpointOfAddRemote(svc),
+			decodeAddRemoteRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
+	codec = codecs.EncodeDecoder("CreateRepository")
+	validator = options.RequestValidator("CreateRepository")
+	r.Method(
+		"POST", "/repository",
+		kithttp.NewServer(
+			MakeEndpointOfCreateRepository(svc),
+			decodeCreateRepositoryRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
+	codec = codecs.EncodeDecoder("DeleteRepository")
+	validator = options.RequestValidator("DeleteRepository")
+	r.Method(
+		"DELETE", "/repository",
+		kithttp.NewServer(
+			MakeEndpointOfDeleteRepository(svc),
+			decodeDeleteRepositoryRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
+	codec = codecs.EncodeDecoder("GetRepositorySyncStatus")
+	validator = options.RequestValidator("GetRepositorySyncStatus")
+	r.Method(
+		"GET", "/repository/sync:status",
+		kithttp.NewServer(
+			MakeEndpointOfGetRepositorySyncStatus(svc),
+			decodeGetRepositorySyncStatusRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
+	codec = codecs.EncodeDecoder("SyncRepository")
+	validator = options.RequestValidator("SyncRepository")
+	r.Method(
+		"POST", "/repository/sync",
+		kithttp.NewServer(
+			MakeEndpointOfSyncRepository(svc),
+			decodeSyncRepositoryRequest(codec, validator),
 			httpcodec.MakeResponseEncoder(codec, 200),
 			append(kitOptions,
 				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
@@ -41,9 +97,73 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 	return r
 }
 
-func decodeMirrorRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+func decodeAddRemoteRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
-		var _req MirrorRepositoryRequest
+		var _req AddRemoteRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeCreateRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req CreateRepositoryRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeDeleteRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req DeleteRepositoryRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeGetRepositorySyncStatusRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req GetRepositorySyncStatusRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeSyncRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req SyncRepositoryRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err

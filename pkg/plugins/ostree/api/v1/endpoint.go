@@ -11,38 +11,184 @@ import (
 	"github.com/go-kit/kit/endpoint"
 )
 
-type MirrorRepositoryRequest struct {
-	Repository string                      `json:"repository"`
-	Properties *OSTreeRepositoryProperties `json:"properties"`
+type AddRemoteRequest struct {
+	Repository string                  `json:"repository"`
+	Properties *OSTreeRemoteProperties `json:"properties"`
 }
 
-// ValidateMirrorRepositoryRequest creates a validator for MirrorRepositoryRequest.
-func ValidateMirrorRepositoryRequest(newSchema func(*MirrorRepositoryRequest) validating.Schema) httpoption.Validator {
+// ValidateAddRemoteRequest creates a validator for AddRemoteRequest.
+func ValidateAddRemoteRequest(newSchema func(*AddRemoteRequest) validating.Schema) httpoption.Validator {
 	return httpoption.FuncValidator(func(value interface{}) error {
-		req := value.(*MirrorRepositoryRequest)
+		req := value.(*AddRemoteRequest)
 		return httpoption.Validate(newSchema(req))
 	})
 }
 
-type MirrorRepositoryResponse struct {
+type AddRemoteResponse struct {
 	Err error `json:"-"`
 }
 
-func (r *MirrorRepositoryResponse) Body() interface{} { return r }
+func (r *AddRemoteResponse) Body() interface{} { return r }
 
 // Failed implements endpoint.Failer.
-func (r *MirrorRepositoryResponse) Failed() error { return r.Err }
+func (r *AddRemoteResponse) Failed() error { return r.Err }
 
-// MakeEndpointOfMirrorRepository creates the endpoint for s.MirrorRepository.
-func MakeEndpointOfMirrorRepository(s OSTree) endpoint.Endpoint {
+// MakeEndpointOfAddRemote creates the endpoint for s.AddRemote.
+func MakeEndpointOfAddRemote(s OSTree) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(*MirrorRepositoryRequest)
-		err := s.MirrorRepository(
+		req := request.(*AddRemoteRequest)
+		err := s.AddRemote(
 			ctx,
 			req.Repository,
 			req.Properties,
 		)
-		return &MirrorRepositoryResponse{
+		return &AddRemoteResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type CreateRepositoryRequest struct {
+	Repository string                      `json:"repository"`
+	Properties *OSTreeRepositoryProperties `json:"properties"`
+}
+
+// ValidateCreateRepositoryRequest creates a validator for CreateRepositoryRequest.
+func ValidateCreateRepositoryRequest(newSchema func(*CreateRepositoryRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*CreateRepositoryRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type CreateRepositoryResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *CreateRepositoryResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *CreateRepositoryResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfCreateRepository creates the endpoint for s.CreateRepository.
+func MakeEndpointOfCreateRepository(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*CreateRepositoryRequest)
+		err := s.CreateRepository(
+			ctx,
+			req.Repository,
+			req.Properties,
+		)
+		return &CreateRepositoryResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type DeleteRepositoryRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateDeleteRepositoryRequest creates a validator for DeleteRepositoryRequest.
+func ValidateDeleteRepositoryRequest(newSchema func(*DeleteRepositoryRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*DeleteRepositoryRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type DeleteRepositoryResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *DeleteRepositoryResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *DeleteRepositoryResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfDeleteRepository creates the endpoint for s.DeleteRepository.
+func MakeEndpointOfDeleteRepository(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*DeleteRepositoryRequest)
+		err := s.DeleteRepository(
+			ctx,
+			req.Repository,
+		)
+		return &DeleteRepositoryResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type GetRepositorySyncStatusRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateGetRepositorySyncStatusRequest creates a validator for GetRepositorySyncStatusRequest.
+func ValidateGetRepositorySyncStatusRequest(newSchema func(*GetRepositorySyncStatusRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*GetRepositorySyncStatusRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type GetRepositorySyncStatusResponse struct {
+	SyncStatus *SyncStatus `json:"sync_status"`
+	Err        error       `json:"-"`
+}
+
+func (r *GetRepositorySyncStatusResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *GetRepositorySyncStatusResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfGetRepositorySyncStatus creates the endpoint for s.GetRepositorySyncStatus.
+func MakeEndpointOfGetRepositorySyncStatus(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*GetRepositorySyncStatusRequest)
+		syncStatus, err := s.GetRepositorySyncStatus(
+			ctx,
+			req.Repository,
+		)
+		return &GetRepositorySyncStatusResponse{
+			SyncStatus: syncStatus,
+			Err:        err,
+		}, nil
+	}
+}
+
+type SyncRepositoryRequest struct {
+	Repository string                       `json:"repository"`
+	Request    *OSTreeRepositorySyncRequest `json:"request"`
+}
+
+// ValidateSyncRepositoryRequest creates a validator for SyncRepositoryRequest.
+func ValidateSyncRepositoryRequest(newSchema func(*SyncRepositoryRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*SyncRepositoryRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type SyncRepositoryResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *SyncRepositoryResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *SyncRepositoryResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfSyncRepository creates the endpoint for s.SyncRepository.
+func MakeEndpointOfSyncRepository(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*SyncRepositoryRequest)
+		err := s.SyncRepository(
+			ctx,
+			req.Repository,
+			req.Request,
+		)
+		return &SyncRepositoryResponse{
 			Err: err,
 		}, nil
 	}

@@ -35,7 +35,7 @@ type Handler struct {
 	delete atomic.Bool
 }
 
-func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) repository.Handler {
+func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handler {
 	return &Handler{
 		RepoHandler: repoHandler,
 		repoDir:     filepath.Join(repoHandler.Params.Dir, repoHandler.Repository),

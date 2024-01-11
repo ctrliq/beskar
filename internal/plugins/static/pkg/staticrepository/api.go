@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.ciq.dev/beskar/pkg/utils"
 	"path/filepath"
 	"time"
 
@@ -90,7 +91,7 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 		logs = append(logs, apiv1.RepositoryLog{
 			Level:   log.Level,
 			Message: log.Message,
-			Date:    timeToString(log.Date),
+			Date:    utils.TimeToString(log.Date),
 		})
 		return nil
 	})
@@ -221,16 +222,7 @@ func toRepositoryFileAPI(pkg *staticdb.RepositoryFile) *apiv1.RepositoryFile {
 		Tag:        pkg.Tag,
 		ID:         pkg.ID,
 		Name:       pkg.Name,
-		UploadTime: timeToString(pkg.UploadTime),
+		UploadTime: utils.TimeToString(pkg.UploadTime),
 		Size:       pkg.Size,
 	}
-}
-
-const timeFormat = time.DateTime + " MST"
-
-func timeToString(t int64) string {
-	if t == 0 {
-		return ""
-	}
-	return time.Unix(t, 0).Format(timeFormat)
 }

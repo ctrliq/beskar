@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"go.ciq.dev/beskar/pkg/utils"
 	"path/filepath"
 	"time"
 
@@ -23,8 +24,6 @@ import (
 )
 
 var dbCtx = context.Background()
-
-const timeFormat = time.DateTime + " MST"
 
 func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.RepositoryProperties) (err error) {
 	if !h.Started() {
@@ -305,8 +304,8 @@ func (h *Handler) GetRepositorySyncStatus(context.Context) (syncStatus *apiv1.Sy
 	reposync := h.getReposync()
 	return &apiv1.SyncStatus{
 		Syncing:        reposync.Syncing,
-		StartTime:      timeToString(reposync.StartTime),
-		EndTime:        timeToString(reposync.EndTime),
+		StartTime:      utils.TimeToString(reposync.StartTime),
+		EndTime:        utils.TimeToString(reposync.EndTime),
 		TotalPackages:  reposync.TotalPackages,
 		SyncedPackages: reposync.SyncedPackages,
 		SyncError:      reposync.SyncError,
@@ -328,7 +327,7 @@ func (h *Handler) ListRepositoryLogs(ctx context.Context, _ *apiv1.Page) (logs [
 		logs = append(logs, apiv1.RepositoryLog{
 			Level:   log.Level,
 			Message: log.Message,
-			Date:    timeToString(log.Date),
+			Date:    utils.TimeToString(log.Date),
 		})
 		return nil
 	})
@@ -530,8 +529,8 @@ func toRepositoryPackageAPI(pkg *yumdb.RepositoryPackage) *apiv1.RepositoryPacka
 		Tag:          pkg.Tag,
 		ID:           pkg.ID,
 		Name:         pkg.Name,
-		UploadTime:   timeToString(pkg.UploadTime),
-		BuildTime:    timeToString(pkg.BuildTime),
+		UploadTime:   utils.TimeToString(pkg.UploadTime),
+		BuildTime:    utils.TimeToString(pkg.BuildTime),
 		Size:         pkg.Size,
 		Architecture: pkg.Architecture,
 		SourceRPM:    pkg.SourceRPM,
@@ -545,11 +544,4 @@ func toRepositoryPackageAPI(pkg *yumdb.RepositoryPackage) *apiv1.RepositoryPacka
 		Verified:     pkg.Verified,
 		GPGSignature: pkg.GPGSignature,
 	}
-}
-
-func timeToString(t int64) string {
-	if t == 0 {
-		return ""
-	}
-	return time.Unix(t, 0).Format(timeFormat)
 }

@@ -11,21 +11,20 @@ import (
 	"go.ciq.dev/beskar/internal/pkg/log"
 )
 
-type HandlerMap = map[string]Handler
-
-type HandlerFactory = func(*slog.Logger, *RepoHandler) Handler
-
-type Manager struct {
+type Manager[H Handler] struct {
 	repositoryMutex  sync.RWMutex
-	repositories     HandlerMap
+	repositories     map[string]H
 	repositoryParams *HandlerParams
 
-	newHandler func(*slog.Logger, *RepoHandler) Handler
+	newHandler func(*slog.Logger, *RepoHandler) H
 }
 
-func NewManager(params *HandlerParams, newHandler HandlerFactory) *Manager {
-	m := &Manager{
-		repositories:     make(HandlerMap),
+func NewManager[H Handler](
+	params *HandlerParams,
+	newHandler func(*slog.Logger, *RepoHandler) H,
+) *Manager[H] {
+	m := &Manager[H]{
+		repositories:     make(map[string]H),
 		repositoryParams: params,
 		newHandler:       newHandler,
 	}
@@ -34,13 +33,13 @@ func NewManager(params *HandlerParams, newHandler HandlerFactory) *Manager {
 	return m
 }
 
-func (m *Manager) remove(repository string) {
+func (m *Manager[H]) remove(repository string) {
 	m.repositoryMutex.Lock()
 	delete(m.repositories, repository)
 	m.repositoryMutex.Unlock()
 }
 
-func (m *Manager) Get(ctx context.Context, repository string) Handler {
+func (m *Manager[H]) Get(ctx context.Context, repository string) H {
 	m.repositoryMutex.Lock()
 
 	r, ok := m.repositories[repository]
@@ -74,7 +73,7 @@ func (m *Manager) Get(ctx context.Context, repository string) Handler {
 	return rh
 }
 
-func (m *Manager) Has(repository string) bool {
+func (m *Manager[H]) Has(repository string) bool {
 	m.repositoryMutex.RLock()
 	_, ok := m.repositories[repository]
 	m.repositoryMutex.RUnlock()
@@ -82,10 +81,10 @@ func (m *Manager) Has(repository string) bool {
 	return ok
 }
 
-func (m *Manager) GetAll() HandlerMap {
+func (m *Manager[H]) GetAll() map[string]H {
 	m.repositoryMutex.RLock()
 
-	handlers := make(HandlerMap)
+	handlers := make(map[string]H)
 	for name, handler := range m.repositories {
 		handlers[name] = handler
 	}

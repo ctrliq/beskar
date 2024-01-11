@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/ostreerepository"
 	"log"
 	"net"
 	"os"
@@ -50,7 +51,7 @@ func serve(beskarOSTreeCmd *flag.FlagSet) error {
 	}
 
 	go func() {
-		errCh <- pluginsrv.Serve(ln, plugin)
+		errCh <- pluginsrv.Serve[*ostreerepository.Handler](ln, plugin)
 	}()
 
 	return wait(false)

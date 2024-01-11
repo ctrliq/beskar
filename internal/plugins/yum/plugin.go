@@ -41,11 +41,11 @@ type Plugin struct {
 	ctx    context.Context
 	config pluginsrv.Config
 
-	repositoryManager *repository.Manager
+	repositoryManager *repository.Manager[*yumrepository.Handler]
 	handlerParams     *repository.HandlerParams
 }
 
-var _ pluginsrv.Service = &Plugin{}
+var _ pluginsrv.Service[*yumrepository.Handler] = &Plugin{}
 
 func New(ctx context.Context, beskarYumConfig *config.BeskarYumConfig) (*Plugin, error) {
 	logger, err := beskarYumConfig.Log.Logger(log.ContextHandler)
@@ -65,7 +65,7 @@ func New(ctx context.Context, beskarYumConfig *config.BeskarYumConfig) (*Plugin,
 			Dir: filepath.Join(beskarYumConfig.DataDir, "_repohandlers_"),
 		},
 	}
-	plugin.repositoryManager = repository.NewManager(
+	plugin.repositoryManager = repository.NewManager[*yumrepository.Handler](
 		plugin.handlerParams,
 		yumrepository.NewHandler,
 	)
@@ -146,6 +146,6 @@ func (p *Plugin) Context() context.Context {
 	return p.ctx
 }
 
-func (p *Plugin) RepositoryManager() *repository.Manager {
+func (p *Plugin) RepositoryManager() *repository.Manager[*yumrepository.Handler] {
 	return p.repositoryManager
 }

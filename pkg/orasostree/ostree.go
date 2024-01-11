@@ -20,9 +20,9 @@ const (
 	OSTreeConfigType = "application/vnd.ciq.ostree.file.v1.config+json"
 	OSTreeLayerType  = "application/vnd.ciq.ostree.v1.file"
 
-	KnownFileSummary    = "summary"
-	KnownFileSummarySig = "summary.sig"
-	KnownFileConfig     = "config"
+	FileSummary    = "summary"
+	FileSummarySig = "summary.sig"
+	FileConfig     = "config"
 )
 
 func NewOSTreePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.Pusher, error) {
@@ -39,7 +39,7 @@ func NewOSTreePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.
 	path = strings.TrimPrefix(path, repoRootDir)
 	path = strings.TrimPrefix(path, "/")
 
-	fileTag := makeTag(path)
+	fileTag := MakeTag(path)
 	rawRef := filepath.Join(repo, "file:"+fileTag)
 	ref, err := name.ParseReference(rawRef, opts...)
 	if err != nil {
@@ -51,7 +51,7 @@ func NewOSTreePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.
 	return oras.NewGenericPusher(
 		ref,
 		oras.NewManifestConfig(OSTreeConfigType, nil),
-		oras.NewLocalFileLayer(absolutePath, oras.WithLocalFileLayerMediaType(OSTreeLayerType)),
+		oras.NewLocalFileLayer(absolutePath, oras.WithLayerMediaType(OSTreeLayerType)),
 	), nil
 }
 
@@ -59,15 +59,15 @@ func NewOSTreePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.
 // These files are meant to stand out in the registry.
 // Note: Values are not limited to the repo's root directory, but at the moment on the following have been identified.
 var specialTags = []string{
-	KnownFileSummary,
-	KnownFileSummarySig,
-	KnownFileConfig,
+	FileSummary,
+	FileSummarySig,
+	FileConfig,
 }
 
-// makeTag creates a tag for a file.
+// MakeTag creates a tag for a file.
 // If the filename starts with a special tag, the tag is returned as-is.
 // Otherwise, the tag is the md5 hash of the filename.
-func makeTag(filename string) string {
+func MakeTag(filename string) string {
 	for _, tag := range specialTags {
 		if filename == tag {
 			return tag

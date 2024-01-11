@@ -36,7 +36,7 @@ type Config struct {
 	Info   *pluginv1.Info
 }
 
-type Service interface {
+type Service[H repository.Handler] interface {
 	// Start starts the service's HTTP server.
 	Start(http.RoundTripper, *mtls.CAPEM, *gossip.BeskarMeta) error
 
@@ -48,10 +48,10 @@ type Service interface {
 
 	// RepositoryManager returns the service's repository manager.
 	// For plugin's without a repository manager, this method should return nil.
-	RepositoryManager() *repository.Manager
+	RepositoryManager() *repository.Manager[H]
 }
 
-func Serve(ln net.Listener, service Service) (errFn error) {
+func Serve[H repository.Handler](ln net.Listener, service Service[H]) (errFn error) {
 	ctx := service.Context()
 
 	errCh := make(chan error)
@@ -132,7 +132,7 @@ func Serve(ln net.Listener, service Service) (errFn error) {
 	case beskarMeta := <-beskarMetaCh:
 		ticker.Stop()
 
-		wh := webHandler{
+		wh := webHandler[H]{
 			pluginInfo: serviceConfig.Info,
 			manager:    repoManager,
 		}

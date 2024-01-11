@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumrepository"
 	"log"
 	"net"
 	"os"
@@ -46,7 +47,7 @@ func serve(beskarYumCmd *flag.FlagSet) error {
 	}
 
 	go func() {
-		errCh <- pluginsrv.Serve(ln, plugin)
+		errCh <- pluginsrv.Serve[*yumrepository.Handler](ln, plugin)
 	}()
 
 	return wait(false)
