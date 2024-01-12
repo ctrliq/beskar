@@ -159,7 +159,7 @@ func MakeEndpointOfGetRepositorySyncStatus(s OSTree) endpoint.Endpoint {
 
 type SyncRepositoryRequest struct {
 	Repository string                       `json:"repository"`
-	Request    *OSTreeRepositorySyncRequest `json:"request"`
+	Properties *OSTreeRepositorySyncRequest `json:"properties"`
 }
 
 // ValidateSyncRepositoryRequest creates a validator for SyncRepositoryRequest.
@@ -186,7 +186,7 @@ func MakeEndpointOfSyncRepository(s OSTree) endpoint.Endpoint {
 		err := s.SyncRepository(
 			ctx,
 			req.Repository,
-			req.Request,
+			req.Properties,
 		)
 		return &SyncRepositoryResponse{
 			Err: err,

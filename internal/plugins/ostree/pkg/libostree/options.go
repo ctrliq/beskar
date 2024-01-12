@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 // #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
 // #include <stdlib.h>

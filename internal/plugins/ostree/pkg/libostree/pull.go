@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 // #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
 // #include <stdlib.h>
@@ -13,7 +13,7 @@ import (
 
 // Pull pulls refs from the named remote.
 // Returns an error if the refs could not be fetched.
-func (r *Repo) Pull(_ context.Context, remote string, opts ...Option) error {
+func (r *Repo) Pull(ctx context.Context, remote string, opts ...Option) error {
 	cremote := C.CString(remote)
 	defer C.free(unsafe.Pointer(cremote))
 
@@ -22,14 +22,24 @@ func (r *Repo) Pull(_ context.Context, remote string, opts ...Option) error {
 
 	var cErr *C.GError
 
+	cCancel := C.g_cancellable_new()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				C.g_cancellable_cancel(cCancel)
+				return
+			}
+		}
+	}()
+
 	// Pull refs from remote
-	// TODO: Implement cancellable so that we can cancel the pull if needed.
 	if C.ostree_repo_pull_with_options(
 		r.native,
 		cremote,
 		options,
 		nil,
-		nil,
+		cCancel,
 		&cErr,
 	) == C.gboolean(0) {
 		return GoError(cErr)

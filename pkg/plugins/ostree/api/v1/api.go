@@ -45,7 +45,7 @@ type OSTreeRepositorySyncRequest struct {
 	Remote string `json:"remote"`
 
 	// Refs - The branches/refs to mirror. Leave empty to mirror all branches/refs.
-	Refs []string `json:"branch"`
+	Refs []string `json:"refs"`
 
 	// Depth - The depth of the mirror. Defaults is 0, -1 means infinite.
 	Depth int `json:"depth"`
@@ -80,21 +80,21 @@ type OSTree interface {
 
 	// Delete a OSTree repository.
 	//kun:op DELETE /repository
-	//kun:success statusCode=200
+	//kun:success statusCode=202
 	DeleteRepository(ctx context.Context, repository string) (err error)
 
 	// Add a new remote to the OSTree repository.
-	//kun:op POST /repository/remote:add
+	//kun:op POST /repository/remote
 	//kun:success statusCode=200
 	AddRemote(ctx context.Context, repository string, properties *OSTreeRemoteProperties) (err error)
 
-	// Mirror an ostree repository.
+	// Sync an ostree repository with one of the configured remotes.
 	//kun:op POST /repository/sync
-	//kun:success statusCode=200
-	SyncRepository(ctx context.Context, repository string, request *OSTreeRepositorySyncRequest) (err error)
+	//kun:success statusCode=202
+	SyncRepository(ctx context.Context, repository string, properties *OSTreeRepositorySyncRequest) (err error)
 
-	// Get YUM repository sync status.
-	//kun:op GET /repository/sync:status
+	// Get OSTree repository sync status.
+	//kun:op GET /repository/sync
 	//kun:success statusCode=200
 	GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *SyncStatus, err error)
 }

@@ -25,7 +25,7 @@ const (
 	FileConfig     = "config"
 )
 
-func NewOSTreePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.Pusher, error) {
+func NewOSTreeFilePusher(repoRootDir, path, repo string, opts ...name.Option) (oras.Pusher, error) {
 	if !strings.HasPrefix(repo, ArtifactsPathPrefix+"/") {
 		if !strings.HasPrefix(repo, OSTreePathPrefix+"/") {
 			repo = filepath.Join(OSTreePathPrefix, repo)

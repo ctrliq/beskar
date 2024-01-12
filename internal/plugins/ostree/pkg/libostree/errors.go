@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 type Err string
 

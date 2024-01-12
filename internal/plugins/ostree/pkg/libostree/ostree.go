@@ -1,1 +1,1 @@
-package ostree
+package libostree

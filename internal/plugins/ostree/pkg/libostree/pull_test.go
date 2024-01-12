@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 import (
 	"context"
@@ -101,6 +101,21 @@ func TestRepo_Pull(t *testing.T) {
 			t.Run("should list remotes", func(t *testing.T) {
 				remotes := repo.ListRemotes()
 				assert.Equal(t, remotes, []string{remoteName})
+			})
+
+			t.Run("should cancel pull", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				err := repo.Pull(
+					ctx,
+					remoteName,
+					Flags(Mirror|TrustedHttp),
+				)
+				assert.Error(t, err)
+				if err == nil {
+					assert.Failf(t, "failed to cancel pull", "err: %s", err.Error())
+				}
 			})
 
 			//TODO: Repeat the following tests for only a specific ref

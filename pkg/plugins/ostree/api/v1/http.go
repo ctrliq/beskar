@@ -27,7 +27,7 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 	codec = codecs.EncodeDecoder("AddRemote")
 	validator = options.RequestValidator("AddRemote")
 	r.Method(
-		"POST", "/repository/remote:add",
+		"POST", "/repository/remote",
 		kithttp.NewServer(
 			MakeEndpointOfAddRemote(svc),
 			decodeAddRemoteRequest(codec, validator),
@@ -59,7 +59,7 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		kithttp.NewServer(
 			MakeEndpointOfDeleteRepository(svc),
 			decodeDeleteRepositoryRequest(codec, validator),
-			httpcodec.MakeResponseEncoder(codec, 200),
+			httpcodec.MakeResponseEncoder(codec, 202),
 			append(kitOptions,
 				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
 			)...,
@@ -69,7 +69,7 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 	codec = codecs.EncodeDecoder("GetRepositorySyncStatus")
 	validator = options.RequestValidator("GetRepositorySyncStatus")
 	r.Method(
-		"GET", "/repository/sync:status",
+		"GET", "/repository/sync",
 		kithttp.NewServer(
 			MakeEndpointOfGetRepositorySyncStatus(svc),
 			decodeGetRepositorySyncStatusRequest(codec, validator),
@@ -87,7 +87,7 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		kithttp.NewServer(
 			MakeEndpointOfSyncRepository(svc),
 			decodeSyncRepositoryRequest(codec, validator),
-			httpcodec.MakeResponseEncoder(codec, 200),
+			httpcodec.MakeResponseEncoder(codec, 202),
 			append(kitOptions,
 				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
 			)...,

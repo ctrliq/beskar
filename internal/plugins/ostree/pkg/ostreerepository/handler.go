@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
+	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
 	"go.ciq.dev/beskar/internal/pkg/repository"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -70,8 +74,8 @@ func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handl
 
 func (h *Handler) setState(state State) error {
 	current := h.getState()
-	if current != StateReady {
-		return werror.Wrap(gcode.ErrUnavailable, fmt.Errorf("repository is not ready: %s", current))
+	if current != StateReady && state != StateReady {
+		return werror.Wrap(gcode.ErrUnavailable, fmt.Errorf("repository is busy: %s", current))
 	}
 	h._state.Swap(int32(state))
 	if state == StateSyncing || current == StateSyncing {
@@ -82,6 +86,7 @@ func (h *Handler) setState(state State) error {
 
 func (h *Handler) clearState() {
 	h._state.Swap(int32(StateReady))
+	h.updateSyncing(false)
 }
 
 func (h *Handler) getState() State {
@@ -108,6 +113,7 @@ func (h *Handler) QueueEvent(_ *eventv1.EventPayload, _ bool) error {
 func (h *Handler) Start(ctx context.Context) {
 	h.logger.Debug("starting repository", "repository", h.Repository)
 	h.clearState()
+
 	go func() {
 		for !h.Stopped.Load() {
 			select {
@@ -117,4 +123,30 @@ func (h *Handler) Start(ctx context.Context) {
 		}
 		h.cleanup()
 	}()
+}
+
+// pullConfig pulls the config file from beskar.
+func (h *Handler) pullFile(_ context.Context, filename string) error {
+	//TODO: Replace with appropriate puller mechanism
+	url := "http://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo", filename)
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check Content-Length
+	if resp.ContentLength <= 0 {
+		return ctl.Errf("content-length is 0")
+	}
+
+	// Create the file
+	out, err := os.Create(path.Join(h.repoDir, filename))
+	if err != nil {
+		return err
+	}
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
 }

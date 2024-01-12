@@ -3,38 +3,72 @@ package orasostree
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"go.ciq.dev/beskar/pkg/oras"
 	"golang.org/x/sync/errgroup"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// PushOSTreeRepository walks a local ostree repository and pushes each file to the given registry.
+type OSTreeRepositoryPusher struct {
+	ctx        context.Context
+	dir        string
+	repo       string
+	jobCount   int
+	nameOpts   []name.Option
+	remoteOpts []remote.Option
+	logger     *slog.Logger
+}
+
+func NewOSTreeRepositoryPusher(ctx context.Context, dir, repo string, jobCount int) *OSTreeRepositoryPusher {
+	return &OSTreeRepositoryPusher{
+		ctx:      ctx,
+		dir:      dir,
+		repo:     repo,
+		jobCount: jobCount,
+	}
+}
+
+func (p *OSTreeRepositoryPusher) WithNameOptions(opts ...name.Option) *OSTreeRepositoryPusher {
+	p.nameOpts = opts
+	return p
+}
+
+func (p *OSTreeRepositoryPusher) WithRemoteOptions(opts ...remote.Option) *OSTreeRepositoryPusher {
+	p.remoteOpts = opts
+	return p
+}
+
+func (p *OSTreeRepositoryPusher) WithLogger(logger *slog.Logger) *OSTreeRepositoryPusher {
+	p.logger = logger
+	return p
+}
+
+// Push walks a local ostree repository and pushes each file to the given registry.
 // dir is the root directory of the ostree repository, i.e., the directory containing the summary file.
 // repo is the name of the ostree repository.
 // registry is the registry to push to.
-func PushOSTreeRepository(ctx context.Context, dir, repo string, jobCount int, opts ...name.Option) error {
+func (p *OSTreeRepositoryPusher) Push() error {
 	// Prove that we were given the root directory of an ostree repository
 	// by checking for the existence of the config file.
 	// Typically, libostree will check for the "objects" directory, but this will do just the same.
-	fileInfo, err := os.Stat(filepath.Join(dir, FileConfig))
+	fileInfo, err := os.Stat(filepath.Join(p.dir, FileConfig))
 	if os.IsNotExist(err) || fileInfo.IsDir() {
-		return fmt.Errorf("%s file not found in %s: you may need to call ostree init", FileConfig, dir)
+		return fmt.Errorf("%s file not found in %s: you may need to call ostree init", FileConfig, p.dir)
 	} else if err != nil {
-		return fmt.Errorf("error accessing %s in %s: %w", FileConfig, dir, err)
+		return fmt.Errorf("error accessing %s in %s: %w", FileConfig, p.dir, err)
 	}
 
 	// Create a worker pool to push each file in the repository concurrently.
 	// ctx will be cancelled on error, and the error will be returned.
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(jobCount)
+	eg, ctx := errgroup.WithContext(p.ctx)
+	eg.SetLimit(p.jobCount)
 
 	// Walk the directory tree, skipping directories and pushing each file.
-	if err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(p.dir, func(path string, d os.DirEntry, err error) error {
 		// If there was an error with the file, return it.
 		if err != nil {
 			return fmt.Errorf("while walking %s: %w", path, err)
@@ -53,7 +87,7 @@ func PushOSTreeRepository(ctx context.Context, dir, repo string, jobCount int, o
 		}
 
 		eg.Go(func() error {
-			if err := push(dir, path, repo, opts...); err != nil {
+			if err := p.push(path); err != nil {
 				return fmt.Errorf("while pushing %s: %w", path, err)
 			}
 			return nil
@@ -63,7 +97,7 @@ func PushOSTreeRepository(ctx context.Context, dir, repo string, jobCount int, o
 	}); err != nil {
 		// We should only receive here if filepath.WalkDir() returns an error.
 		// Push errors are handled below.
-		return fmt.Errorf("while walking %s: %w", dir, err)
+		return fmt.Errorf("while walking %s: %w", p.dir, err)
 	}
 
 	// Wait for all workers to finish.
@@ -71,15 +105,18 @@ func PushOSTreeRepository(ctx context.Context, dir, repo string, jobCount int, o
 	return eg.Wait()
 }
 
-func push(repoRootDir, path, repo string, opts ...name.Option) error {
-	pusher, err := NewOSTreePusher(repoRootDir, path, repo, opts...)
+func (p *OSTreeRepositoryPusher) push(path string) error {
+	pusher, err := NewOSTreeFilePusher(p.dir, path, p.repo, p.nameOpts...)
 	if err != nil {
+
 		return fmt.Errorf("while creating OSTree pusher: %w", err)
 	}
 
-	path = strings.TrimPrefix(path, repoRootDir)
-	path = strings.TrimPrefix(path, "/")
-	fmt.Printf("Pushing %s to %s\n", path, pusher.Reference())
+	if p.logger != nil {
+		path = strings.TrimPrefix(path, p.dir)
+		path = strings.TrimPrefix(path, "/")
+		p.logger.Debug("pushing file to beskar", "file", path, "reference", pusher.Reference())
+	}
 
-	return oras.Push(pusher, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	return oras.Push(pusher, p.remoteOpts...)
 }

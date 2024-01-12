@@ -2,7 +2,6 @@ package ostreerepository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
 	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
@@ -12,13 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
-)
-
-var (
-	errHandlerNotStarted   = errors.New("handler not started")
-	errProvisionInProgress = errors.New("provision in progress")
-	errSyncInProgress      = errors.New("sync in progress")
-	errDeleteInProgress    = errors.New("delete in progress")
+	"time"
 )
 
 func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTreeRepositoryProperties) (err error) {
@@ -28,37 +21,38 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 		return ctl.Errf("at least one remote is required")
 	}
 
+	// Check if repo already exists
+	if h.checkRepoExists(ctx) {
+		return ctl.Err("repository already exists")
+	}
+
 	// Transition to provisioning state
 	if err := h.setState(StateProvisioning); err != nil {
 		return err
 	}
 	defer h.clearState()
 
-	// Check if repo already exists
-	if h.checkRepoExists(ctx) {
-		return ctl.Errf("repository %s already exists", h.Repository)
-	}
-
-	if err := h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *ostree.Repo) error {
+	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
 
 		// Add user provided remotes
 		// We do not need to add beskar remote here
 		for _, remote := range properties.Remotes {
-			var opts []ostree.Option
+			var opts []libostree.Option
 			if remote.NoGPGVerify {
-				opts = append(opts, ostree.NoGPGVerify())
+				opts = append(opts, libostree.NoGPGVerify())
 			}
 			if err := repo.AddRemote(remote.Name, remote.RemoteURL, opts...); err != nil {
-				return ctl.Errf("while adding remote to ostree repository %s: %s", remote.Name, err)
+				return false, ctl.Errf("adding remote to ostree repository %s: %s", remote.Name, err)
 			}
 		}
-		return nil
 
-	}); err != nil {
-		return err
-	}
+		if err := repo.RegenerateSummary(); err != nil {
+			return false, ctl.Errf("regenerating summary for ostree repository %s: %s", h.repoDir, err)
+		}
 
-	return nil
+		return true, nil
+
+	}, SkipPull())
 }
 
 // DeleteRepository deletes the repository from beskar and the local filesystem.
@@ -71,21 +65,22 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 	}
 
 	// Check if repo already exists
-	if h.checkRepoExists(ctx) {
-		return ctl.Errf("repository %s already exists", h.Repository)
+	if !h.checkRepoExists(ctx) {
+		defer h.clearState()
+		return ctl.Err("repository does not exist")
 	}
 
 	go func() {
 		defer func() {
-			h.clearState()
 			if err == nil {
 				// stop the repo handler and trigger cleanup
 				h.Stop()
 			}
+			h.clearState()
 		}()
-		h.logger.Debug("deleting repository", "repository", h.Repository)
+		h.logger.Debug("deleting repository")
 
-		if err := h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *ostree.Repo) error {
+		err := h.BeginLocalRepoTransaction(context.Background(), func(ctx context.Context, repo *libostree.Repo) (bool, error) {
 
 			// Create a worker pool to deleting each file in the repository concurrently.
 			// ctx will be cancelled on error, and the error will be returned.
@@ -96,7 +91,7 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 			if err := filepath.WalkDir(h.repoDir, func(path string, d os.DirEntry, err error) error {
 				// If there was an error with the file, return it.
 				if err != nil {
-					return fmt.Errorf("while walking %s: %w", path, err)
+					return fmt.Errorf("walking %s: %w", path, err)
 				}
 				// Skip directories.
 				if d.IsDir() {
@@ -113,10 +108,11 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 				eg.Go(func() error {
 					// Delete the file from the repository
 					filename := filepath.Base(path)
+					h.logger.Debug("deleting file from beskar", "file", filename)
 					digest := orasostree.MakeTag(filename)
 					digestRef := filepath.Join(h.Repository, "file:"+digest)
 					if err := h.DeleteManifest(digestRef); err != nil {
-						h.logger.Error("deleting file from beskar", "repository", h.Repository, "error", err.Error())
+						h.logger.Error("deleting file from beskar", "error", err.Error())
 					}
 
 					return nil
@@ -124,13 +120,16 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 
 				return nil
 			}); err != nil {
-				return nil
+				return false, err
 			}
 
-			return eg.Wait()
+			// We don't want to push any changes to beskar.
+			return false, eg.Wait()
 
-		}); err != nil {
-			h.logger.Error("while deleting repository", "repository", h.Repository, "error", err.Error())
+		})
+
+		if err != nil {
+			h.logger.Error("deleting repository", "error", err.Error())
 		}
 	}()
 
@@ -144,30 +143,27 @@ func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemotePrope
 	}
 	defer h.clearState()
 
-	if h.checkRepoExists(ctx) {
-		return ctl.Errf("repository %s does not exist", h.Repository)
+	if !h.checkRepoExists(ctx) {
+		return ctl.Errf("repository does not exist")
 	}
 
-	if err := h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *ostree.Repo) error {
+	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
 		// Add user provided remote
-		var opts []ostree.Option
+		var opts []libostree.Option
 		if remote.NoGPGVerify {
-			opts = append(opts, ostree.NoGPGVerify())
+			opts = append(opts, libostree.NoGPGVerify())
 		}
 		if err := repo.AddRemote(remote.Name, remote.RemoteURL, opts...); err != nil {
-			return ctl.Errf("while adding remote to ostree repository %s: %s", remote.Name, err)
+			// No need to make error pretty, it is already pretty
+			return false, err
 		}
 
-		return nil
+		return true, nil
 
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	}, SkipPull())
 }
 
-func (h *Handler) SyncRepository(ctx context.Context, request *apiv1.OSTreeRepositorySyncRequest) (err error) {
+func (h *Handler) SyncRepository(ctx context.Context, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
 	// Transition to syncing state
 	if err := h.setState(StateSyncing); err != nil {
 		return err
@@ -175,37 +171,56 @@ func (h *Handler) SyncRepository(ctx context.Context, request *apiv1.OSTreeRepos
 
 	// Spin up pull worker
 	go func() {
+		h.logger.Debug("syncing repository")
+
+		var err error
 		defer func() {
+			if err != nil {
+				h.logger.Error("repository sync failed", "properties", properties, "error", err.Error())
+				repoSync := *h.repoSync.Load()
+				repoSync.SyncError = err.Error()
+				h.setRepoSync(&repoSync)
+			} else {
+				h.logger.Debug("repository sync complete", "properties", properties)
+			}
 			h.clearState()
-			h.logger.Debug("repository sync complete", "repository", h.Repository, "request", request)
 		}()
 
-		if err := h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *ostree.Repo) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
 			// Pull the latest changes from the remote.
-			opts := []ostree.Option{
-				ostree.Depth(request.Depth),
+			opts := []libostree.Option{
+				libostree.Depth(properties.Depth),
+				libostree.Flags(libostree.Mirror | libostree.TrustedHttp),
 			}
-			if len(request.Refs) > 0 {
-				opts = append(opts, ostree.Refs(request.Refs...))
+			if len(properties.Refs) > 0 {
+				opts = append(opts, libostree.Refs(properties.Refs...))
 			}
 
 			// pull remote content into local repo
-			if err := repo.Pull(ctx, request.Remote, opts...); err != nil {
-				return ctl.Errf("while pulling ostree repository from %s: %s", request.Remote, err)
+			if err := repo.Pull(ctx, properties.Remote, opts...); err != nil {
+				return false, ctl.Errf("pulling ostree repository: %s", err)
 			}
 
-			return nil
+			if err := repo.RegenerateSummary(); err != nil {
+				return false, ctl.Errf("regenerating summary for ostree repository %s: %s", h.repoDir, err)
+			}
 
-		}); err != nil {
-			h.logger.Error("repository sync", "repository", h.Repository, "request", request, "error", err.Error())
-		}
+			return true, nil
+
+		})
 	}()
 
 	return nil
 }
 
 func (h *Handler) GetRepositorySyncStatus(_ context.Context) (syncStatus *apiv1.SyncStatus, err error) {
-	repoSync := h.getRepoSync()
+	repoSync := h.repoSync.Load()
+	if repoSync == nil {
+		return nil, ctl.Errf("repository sync status not available")
+	}
 	return &apiv1.SyncStatus{
 		Syncing:   repoSync.Syncing,
 		StartTime: utils.TimeToString(repoSync.StartTime),

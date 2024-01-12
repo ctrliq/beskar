@@ -42,12 +42,12 @@ func (p *Plugin) AddRemote(ctx context.Context, repository string, properties *a
 	return p.repositoryManager.Get(ctx, repository).AddRemote(ctx, properties)
 }
 
-func (p *Plugin) SyncRepository(ctx context.Context, repository string, request *apiv1.OSTreeRepositorySyncRequest) (err error) {
+func (p *Plugin) SyncRepository(ctx context.Context, repository string, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err
 	}
 
-	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, request)
+	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, properties)
 }
 
 func (p *Plugin) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *apiv1.SyncStatus, err error) {

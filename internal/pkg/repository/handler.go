@@ -194,6 +194,14 @@ func (rh *RepoHandler) DeleteManifest(ref string) (errFn error) {
 	return remote.Delete(namedRef, rh.Params.RemoteOptions...)
 }
 
+func (rh *RepoHandler) PullManifest(ref string) (errFn error) {
+	namedRef, err := name.ParseReference(ref, rh.Params.NameOptions...)
+	if err != nil {
+		return err
+	}
+	return remote.Delete(namedRef, rh.Params.RemoteOptions...)
+}
+
 func (rh *RepoHandler) SyncArtifact(ctx context.Context, name string, timeout time.Duration) (chan error, func() error) {
 	errCh := make(chan error, 1)
 

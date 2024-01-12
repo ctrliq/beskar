@@ -5,7 +5,9 @@ package ostree
 
 import (
 	"context"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/spf13/cobra"
 	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
 	"go.ciq.dev/beskar/pkg/orasostree"
@@ -22,7 +24,10 @@ var (
 				return ctl.Err("a directory must be specified")
 			}
 
-			if err := orasostree.PushOSTreeRepository(context.Background(), dir, ctl.Repo(), jobCount, name.WithDefaultRegistry(ctl.Registry())); err != nil {
+			repoPusher := orasostree.NewOSTreeRepositoryPusher(context.Background(), dir, ctl.Repo(), jobCount)
+			repoPusher = repoPusher.WithNameOptions(name.WithDefaultRegistry(ctl.Registry()))
+			repoPusher = repoPusher.WithRemoteOptions(remote.WithAuthFromKeychain(authn.DefaultKeychain))
+			if err := repoPusher.Push(); err != nil {
 				return ctl.Errf("while pushing ostree repository: %s", err)
 			}
 			return nil

@@ -29,7 +29,7 @@ produces:
 
 	paths = `
 paths:
-  /repository/remote:add:
+  /repository/remote:
     post:
       description: "Add a new remote to the OSTree repository."
       operationId: "AddRemote"
@@ -64,9 +64,9 @@ paths:
           schema:
             $ref: "#/definitions/DeleteRepositoryRequestBody"
       %s
-  /repository/sync:status:
+  /repository/sync:
     get:
-      description: "Get YUM repository sync status."
+      description: "Get OSTree repository sync status."
       operationId: "GetRepositorySyncStatus"
       tags:
         - ostree
@@ -76,9 +76,8 @@ paths:
           schema:
             $ref: "#/definitions/GetRepositorySyncStatusRequestBody"
       %s
-  /repository/sync:
     post:
-      description: "Mirror an ostree repository."
+      description: "Sync an ostree repository with one of the configured remotes."
       operationId: "SyncRepository"
       tags:
         - ostree
@@ -95,9 +94,9 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 	return []oas2.OASResponses{
 		oas2.GetOASResponses(schema, "AddRemote", 200, &AddRemoteResponse{}),
 		oas2.GetOASResponses(schema, "CreateRepository", 200, &CreateRepositoryResponse{}),
-		oas2.GetOASResponses(schema, "DeleteRepository", 200, &DeleteRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "DeleteRepository", 202, &DeleteRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncStatus", 200, &GetRepositorySyncStatusResponse{}),
-		oas2.GetOASResponses(schema, "SyncRepository", 200, &SyncRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "SyncRepository", 202, &SyncRepositoryResponse{}),
 	}
 }
 
@@ -119,7 +118,7 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	oas2.AddDefinition(defs, "DeleteRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
 	}{}))
-	oas2.AddResponseDefinitions(defs, schema, "DeleteRepository", 200, (&DeleteRepositoryResponse{}).Body())
+	oas2.AddResponseDefinitions(defs, schema, "DeleteRepository", 202, (&DeleteRepositoryResponse{}).Body())
 
 	oas2.AddDefinition(defs, "GetRepositorySyncStatusRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
@@ -128,9 +127,9 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 
 	oas2.AddDefinition(defs, "SyncRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string                       `json:"repository"`
-		Request    *OSTreeRepositorySyncRequest `json:"request"`
+		Properties *OSTreeRepositorySyncRequest `json:"properties"`
 	}{}))
-	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 200, (&SyncRepositoryResponse{}).Body())
+	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 202, (&SyncRepositoryResponse{}).Body())
 
 	return defs
 }

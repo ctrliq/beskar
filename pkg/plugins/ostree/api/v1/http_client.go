@@ -37,7 +37,7 @@ func NewHTTPClient(codecs httpcodec.Codecs, httpClient *http.Client, baseURL str
 func (c *HTTPClient) AddRemote(ctx context.Context, repository string, properties *OSTreeRemoteProperties) (err error) {
 	codec := c.codecs.EncodeDecoder("AddRemote")
 
-	path := "/repository/remote:add"
+	path := "/repository/remote"
 	u := &url.URL{
 		Scheme: c.scheme,
 		Host:   c.host,
@@ -182,7 +182,7 @@ func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string) (e
 func (c *HTTPClient) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *SyncStatus, err error) {
 	codec := c.codecs.EncodeDecoder("GetRepositorySyncStatus")
 
-	path := "/repository/sync:status"
+	path := "/repository/sync"
 	u := &url.URL{
 		Scheme: c.scheme,
 		Host:   c.host,
@@ -231,7 +231,7 @@ func (c *HTTPClient) GetRepositorySyncStatus(ctx context.Context, repository str
 	return respBody.SyncStatus, nil
 }
 
-func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, request *OSTreeRepositorySyncRequest) (err error) {
+func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, properties *OSTreeRepositorySyncRequest) (err error) {
 	codec := c.codecs.EncodeDecoder("SyncRepository")
 
 	path := "/repository/sync"
@@ -243,10 +243,10 @@ func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, requ
 
 	reqBody := struct {
 		Repository string                       `json:"repository"`
-		Request    *OSTreeRepositorySyncRequest `json:"request"`
+		Properties *OSTreeRepositorySyncRequest `json:"properties"`
 	}{
 		Repository: repository,
-		Request:    request,
+		Properties: properties,
 	}
 	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
 	if err != nil {

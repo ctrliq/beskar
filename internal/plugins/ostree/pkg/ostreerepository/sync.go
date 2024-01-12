@@ -5,14 +5,10 @@ import (
 )
 
 type RepoSync struct {
-	Syncing   bool   `db:"syncing"`
-	StartTime int64  `db:"start_time"`
-	EndTime   int64  `db:"end_time"`
-	SyncError string `db:"sync_error"`
-}
-
-func (h *Handler) getRepoSync() *RepoSync {
-	return h.repoSync.Load()
+	Syncing   bool
+	StartTime int64
+	EndTime   int64
+	SyncError string
 }
 
 func (h *Handler) setRepoSync(repoSync *RepoSync) {
@@ -21,7 +17,11 @@ func (h *Handler) setRepoSync(repoSync *RepoSync) {
 }
 
 func (h *Handler) updateSyncing(syncing bool) *RepoSync {
-	repoSync := *h.getRepoSync()
+	if h.repoSync.Load() == nil {
+		h.repoSync.Store(&RepoSync{})
+	}
+
+	repoSync := *h.repoSync.Load()
 	previousSyncing := repoSync.Syncing
 	repoSync.Syncing = syncing
 	if syncing && !previousSyncing {

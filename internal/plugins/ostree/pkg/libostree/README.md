@@ -7,7 +7,7 @@ ostree is a wrapper around [libostree](https://github.com/ostreedev/ostree) that
 1. A minimal glib implementation exists within the ostree pkg. This is to avoid a dependency on glib for the time being.
    - This implementation is not complete and will be expanded as needed.
    - The glib implementation is not intended to be used outside of the ostree pkg.
-   - `GCancellable` is not implemented. Just send nil.
+   - `GCancellable` is not implemented on some functions. If the func accepts a context.Context it most likely implements a GCancellable.
 2. Not all of libostree is wrapped. Only the parts that are needed for beskar are wrapped. Which is basically everything 
     need to perform pull operations.
     - `OstreeAsyncProgress` is not implemented. Just send nil.

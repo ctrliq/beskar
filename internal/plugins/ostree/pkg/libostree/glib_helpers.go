@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 // #cgo pkg-config: glib-2.0 gobject-2.0
 // #include <glib.h>
@@ -7,7 +7,9 @@ package ostree
 // #include <stdlib.h>
 // #include "glib_helpers.go.h"
 import "C"
-import "errors"
+import (
+	"errors"
+)
 
 // GoError converts a C glib error to a Go error.
 // The C error is freed after conversion.

@@ -1,4 +1,4 @@
-package ostree
+package libostree
 
 // #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
 // #include <stdlib.h>
@@ -85,7 +85,7 @@ func fromNative(cRepo *C.OstreeRepo) *Repo {
 
 	// Let the GB trigger free the cRepo for us when repo is freed.
 	runtime.SetFinalizer(repo, func(r *Repo) {
-		C.free(unsafe.Pointer(cRepo))
+		C.free(unsafe.Pointer(r.native))
 	})
 
 	return repo
