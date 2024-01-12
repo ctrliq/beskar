@@ -9,9 +9,10 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"go.ciq.dev/beskar/pkg/utils"
 	"path/filepath"
 	"time"
+
+	"go.ciq.dev/beskar/pkg/utils"
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"

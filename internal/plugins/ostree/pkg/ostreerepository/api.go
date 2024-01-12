@@ -1,17 +1,21 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package ostreerepository
 
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
 	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
 	"go.ciq.dev/beskar/pkg/orasostree"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/ostree/api/v1"
 	"go.ciq.dev/beskar/pkg/utils"
 	"golang.org/x/sync/errgroup"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTreeRepositoryProperties) (err error) {
@@ -33,7 +37,6 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 	defer h.clearState()
 
 	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
-
 		// Add user provided remotes
 		// We do not need to add beskar remote here
 		for _, remote := range properties.Remotes {
@@ -51,7 +54,6 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 		}
 
 		return true, nil
-
 	}, SkipPull())
 }
 
@@ -81,7 +83,6 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 		h.logger.Debug("deleting repository")
 
 		err := h.BeginLocalRepoTransaction(context.Background(), func(ctx context.Context, repo *libostree.Repo) (bool, error) {
-
 			// Create a worker pool to deleting each file in the repository concurrently.
 			// ctx will be cancelled on error, and the error will be returned.
 			eg, ctx := errgroup.WithContext(ctx)
@@ -125,9 +126,7 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 
 			// We don't want to push any changes to beskar.
 			return false, eg.Wait()
-
 		})
-
 		if err != nil {
 			h.logger.Error("deleting repository", "error", err.Error())
 		}
@@ -159,7 +158,6 @@ func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemotePrope
 		}
 
 		return true, nil
-
 	}, SkipPull())
 }
 
@@ -209,7 +207,6 @@ func (h *Handler) SyncRepository(ctx context.Context, properties *apiv1.OSTreeRe
 			}
 
 			return true, nil
-
 		})
 	}()
 

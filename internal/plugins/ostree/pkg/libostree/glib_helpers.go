@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package libostree
 
 // #cgo pkg-config: glib-2.0 gobject-2.0
@@ -7,6 +10,7 @@ package libostree
 // #include <stdlib.h>
 // #include "glib_helpers.go.h"
 import "C"
+
 import (
 	"errors"
 )

@@ -58,10 +58,10 @@ type SyncStatus struct {
 	EndTime   string `json:"end_time"`
 	SyncError string `json:"sync_error"`
 
-	//TODO: Implement these
+	// TODO: Implement these
 	// The data for these is present when performing a pull via the ostree cli, so it is in the libostree code base.
-	//SyncedMetadata int `json:"synced_metadata"`
-	//SyncedObjects  int `json:"synced_objects"`
+	// SyncedMetadata int `json:"synced_metadata"`
+	// SyncedObjects  int `json:"synced_objects"`
 }
 
 // OSTree is used for managing ostree repositories.

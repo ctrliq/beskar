@@ -6,11 +6,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/ostreerepository"
 	"log"
 	"net"
 	"os"
 	"syscall"
+
+	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/ostreerepository"
 
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/ostree"

@@ -104,7 +104,7 @@ var binaries = map[string]binaryConfig{
 		},
 		useProto: true,
 		// NOTE: restore in case alpine createrepo_c package is broken again
-		//baseImage: "debian:bullseye-slim",
+		// baseImage: "debian:bullseye-slim",
 		integrationTest: &integrationTest{
 			isPlugin: true,
 			envs: map[string]string{

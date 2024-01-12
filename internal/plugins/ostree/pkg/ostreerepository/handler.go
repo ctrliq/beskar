@@ -1,13 +1,11 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package ostreerepository
 
 import (
 	"context"
 	"fmt"
-	"github.com/RussellLuo/kun/pkg/werror"
-	"github.com/RussellLuo/kun/pkg/werror/gcode"
-	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
-	"go.ciq.dev/beskar/internal/pkg/repository"
-	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +14,12 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+
+	"github.com/RussellLuo/kun/pkg/werror"
+	"github.com/RussellLuo/kun/pkg/werror/gcode"
+	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
+	"go.ciq.dev/beskar/internal/pkg/repository"
+	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
 )
 
 const (
@@ -127,7 +131,7 @@ func (h *Handler) Start(ctx context.Context) {
 
 // pullConfig pulls the config file from beskar.
 func (h *Handler) pullFile(_ context.Context, filename string) error {
-	//TODO: Replace with appropriate puller mechanism
+	// TODO: Replace with appropriate puller mechanism
 	url := "http://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo", filename)
 	resp, err := http.Get(url)
 	if err != nil {

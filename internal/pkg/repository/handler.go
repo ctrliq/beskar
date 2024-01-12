@@ -6,7 +6,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"go.ciq.dev/beskar/internal/pkg/gossip"
 	"io"
 	"net"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.ciq.dev/beskar/internal/pkg/gossip"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"

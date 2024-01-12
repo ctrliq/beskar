@@ -1,16 +1,20 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package orasostree
 
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"go.ciq.dev/beskar/pkg/oras"
-	"golang.org/x/sync/errgroup"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"go.ciq.dev/beskar/pkg/oras"
+	"golang.org/x/sync/errgroup"
 )
 
 type OSTreeRepositoryPusher struct {
@@ -108,7 +112,6 @@ func (p *OSTreeRepositoryPusher) Push() error {
 func (p *OSTreeRepositoryPusher) push(path string) error {
 	pusher, err := NewOSTreeFilePusher(p.dir, path, p.repo, p.nameOpts...)
 	if err != nil {
-
 		return fmt.Errorf("while creating OSTree pusher: %w", err)
 	}
 

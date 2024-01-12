@@ -6,6 +6,12 @@ package ostree
 import (
 	"context"
 	_ "embed"
+	"net"
+	"net/http"
+	"net/http/pprof"
+	"path/filepath"
+	"strconv"
+
 	"github.com/RussellLuo/kun/pkg/httpcodec"
 	"github.com/go-chi/chi"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -20,11 +26,6 @@ import (
 	"go.ciq.dev/beskar/pkg/mtls"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/ostree/api/v1"
 	"go.ciq.dev/beskar/pkg/version"
-	"net"
-	"net/http"
-	"net/http/pprof"
-	"path/filepath"
-	"strconv"
 )
 
 const (

@@ -1,15 +1,19 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package libostree
 
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -22,7 +26,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestRepo_Pull(t *testing.T) {
-
 	fmt.Println(os.Getwd())
 	svr := httptest.NewServer(http.FileServer(http.Dir("testdata/repo")))
 	defer svr.Close()
@@ -40,7 +43,7 @@ func TestRepo_Pull(t *testing.T) {
 		RepoModeBare,
 		RepoModeBareUser,
 		RepoModeBareUserOnly,
-		//RepoModeBareSplitXAttrs,
+		// RepoModeBareSplitXAttrs,
 	}
 
 	// Test pull for each mode
@@ -118,7 +121,7 @@ func TestRepo_Pull(t *testing.T) {
 				}
 			})
 
-			//TODO: Repeat the following tests for only a specific ref
+			// TODO: Repeat the following tests for only a specific ref
 			t.Run("should pull entire repo", func(t *testing.T) {
 				err := repo.Pull(
 					context.TODO(),
@@ -153,7 +156,7 @@ func TestRepo_Pull(t *testing.T) {
 				for _, ref := range refs {
 					checksum := ref.Checksum
 					assert.NotEmpty(t, checksum)
-					for sum, _ := range expectedChecksums {
+					for sum := range expectedChecksums {
 						if sum == checksum {
 							expectedChecksums[sum] = true
 						}

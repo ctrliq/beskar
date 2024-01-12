@@ -6,11 +6,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
 	"log"
 	"net"
 	"os"
 	"syscall"
+
+	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
 
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/static"

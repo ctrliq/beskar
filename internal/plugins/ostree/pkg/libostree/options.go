@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package libostree
 
 // #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
@@ -13,12 +16,13 @@ import "unsafe"
 // Option defines an option for pulling ostree repos.
 // It is used to build a *C.GVariant via a *C.GVariantBuilder.
 // free is an optional function that frees the memory allocated by the option. free may be called more than once.
-type Option func(builder *C.GVariantBuilder, free freeFunc)
-type freeFunc func(...unsafe.Pointer)
+type (
+	Option   func(builder *C.GVariantBuilder, free freeFunc)
+	freeFunc func(...unsafe.Pointer)
+)
 
 // ToGVariant converts the given Options to a GVariant using a GVaraintBuilder.
 func toGVariant(opts ...Option) *C.GVariant {
-
 	typeStr := (*C.gchar)(C.CString("a{sv}"))
 	defer C.free(unsafe.Pointer(typeStr))
 

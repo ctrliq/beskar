@@ -1,13 +1,17 @@
+// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-License-Identifier: Apache-2.0
+
 package ostreerepository
 
 import (
 	"context"
-	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
-	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
-	"go.ciq.dev/beskar/pkg/orasostree"
 	"os"
 	"path"
 	"path/filepath"
+
+	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
+	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
+	"go.ciq.dev/beskar/pkg/orasostree"
 )
 
 // checkRepoExists checks if the ostree repository exists in beskar.
@@ -19,10 +23,12 @@ func (h *Handler) checkRepoExists(_ context.Context) bool {
 	return err == nil
 }
 
-type TransactionFn func(ctx context.Context, repo *libostree.Repo) (commit bool, err error)
-type TransactionOptions struct {
-	skipPull bool
-}
+type (
+	TransactionFn      func(ctx context.Context, repo *libostree.Repo) (commit bool, err error)
+	TransactionOptions struct {
+		skipPull bool
+	}
+)
 
 type TransactionOption func(*TransactionOptions)
 
@@ -41,7 +47,6 @@ func SkipPull() TransactionOption {
 // 5. If the transactorFn returns true, the local ostree repository is pushed to beskar. If false, all local changes are discarded.
 // 6. The temporary directory is removed.
 func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn TransactionFn, opts ...TransactionOption) error {
-
 	options := TransactionOptions{}
 	for _, opt := range opts {
 		opt(&options)
