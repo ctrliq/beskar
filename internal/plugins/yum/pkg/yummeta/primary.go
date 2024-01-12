@@ -1,5 +1,4 @@
 //nolint:goheader
-
 // Copyright (c) All respective contributors to the Peridot Project. All rights reserved.
 // Copyright (c) 2021-2022 Rocky Enterprise Software Foundation, Inc. All rights reserved.
 // Copyright (c) 2021-2022 Ctrl IQ, Inc. All rights reserved.
