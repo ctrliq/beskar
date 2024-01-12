@@ -1,6 +1,5 @@
 package mage
 
-import "C"
 import (
 	"context"
 	"dagger.io/dagger"
