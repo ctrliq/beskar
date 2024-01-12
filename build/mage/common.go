@@ -99,8 +99,8 @@ func getChartsSource(client *dagger.Client) *dagger.Directory {
 func goCache(client *dagger.Client) func(dc *dagger.Container) *dagger.Container {
 	return func(dc *dagger.Container) *dagger.Container {
 		return dc.
-			WithMountedCache("/go", client.CacheVolume("go-mod-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Shared}).
-			WithMountedCache("/root/.cache", client.CacheVolume("go-build-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Shared})
+			WithMountedCache("/go", client.CacheVolume("go-mod-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Locked}).
+			WithMountedCache("/root/.cache", client.CacheVolume("go-build-cache"), dagger.ContainerWithMountedCacheOpts{Sharing: dagger.Locked})
 	}
 }
 

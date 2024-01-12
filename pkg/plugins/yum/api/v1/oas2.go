@@ -168,6 +168,18 @@ paths:
           schema:
             $ref: "#/definitions/SyncRepositoryRequestBody"
       %s
+  /repository/sync:url:
+    get:
+      description: "Sync YUM repository with an upstream repository using a specified URL."
+      operationId: "SyncRepositoryWithURL"
+      tags:
+        - yum
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/SyncRepositoryWithURLRequestBody"
+      %s
 `
 )
 
@@ -185,6 +197,7 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "ListRepositoryLogs", 200, &ListRepositoryLogsResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryPackages", 200, &ListRepositoryPackagesResponse{}),
 		oas2.GetOASResponses(schema, "SyncRepository", 200, &SyncRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "SyncRepositoryWithURL", 200, &SyncRepositoryWithURLResponse{}),
 	}
 }
 
@@ -254,6 +267,13 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		Wait       bool   `json:"wait"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 200, (&SyncRepositoryResponse{}).Body())
+
+	oas2.AddDefinition(defs, "SyncRepositoryWithURLRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		MirrorURL  string `json:"mirror_url"`
+		Wait       bool   `json:"wait"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "SyncRepositoryWithURL", 200, (&SyncRepositoryWithURLResponse{}).Body())
 
 	oas2.AddDefinition(defs, "UpdateRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string                `json:"repository"`

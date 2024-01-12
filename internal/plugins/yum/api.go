@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package yum
@@ -51,6 +51,13 @@ func (p *Plugin) SyncRepository(ctx context.Context, repository string, wait boo
 		return err
 	}
 	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, wait)
+}
+
+func (p *Plugin) SyncRepositoryWithURL(ctx context.Context, repository, url string, wait bool) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).SyncRepositoryWithURL(ctx, url, wait)
 }
 
 func (p *Plugin) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *apiv1.SyncStatus, err error) {

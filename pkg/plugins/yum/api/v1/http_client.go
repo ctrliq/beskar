@@ -599,6 +599,57 @@ func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, wait
 	return nil
 }
 
+func (c *HTTPClient) SyncRepositoryWithURL(ctx context.Context, repository string, mirrorURL string, wait bool) (err error) {
+	codec := c.codecs.EncodeDecoder("SyncRepositoryWithURL")
+
+	path := "/repository/sync:url"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+		MirrorURL  string `json:"mirror_url"`
+		Wait       bool   `json:"wait"`
+	}{
+		Repository: repository,
+		MirrorURL:  mirrorURL,
+		Wait:       wait,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (c *HTTPClient) UpdateRepository(ctx context.Context, repository string, properties *RepositoryProperties) (err error) {
 	codec := c.codecs.EncodeDecoder("UpdateRepository")
 

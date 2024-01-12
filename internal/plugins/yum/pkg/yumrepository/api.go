@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package yumrepository
@@ -275,6 +275,39 @@ func (h *Handler) SyncRepository(_ context.Context, wait bool) (err error) {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
 	} else if len(h.getMirrorURLs()) == 0 {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror URLs setup"))
+	} else if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	} else if h.syncing.Swap(true) {
+		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
+	}
+
+	var waitErrCh chan error
+
+	if wait {
+		waitErrCh = make(chan error, 1)
+	}
+
+	select {
+	case h.syncCh <- waitErrCh:
+		if waitErrCh != nil {
+			if err := <-waitErrCh; err != nil {
+				return werror.Wrap(gcode.ErrInternal, fmt.Errorf("synchronization failed: %w", err))
+			}
+		}
+	default:
+		return werror.Wrap(gcode.ErrUnavailable, errors.New("something goes wrong"))
+	}
+
+	return nil
+}
+
+func (h *Handler) SyncRepositoryWithURL(_ context.Context, url string, wait bool) (err error) {
+	if !h.Started() {
+		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if !h.getMirror() {
+		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
+	} else if err := h.setMirrorURLs([]string{url}); err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
 	} else if h.delete.Load() {
 		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	} else if h.syncing.Swap(true) {

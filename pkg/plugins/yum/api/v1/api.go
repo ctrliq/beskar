@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2023, CIQ, Inc. All rights reserved
+// SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package apiv1
@@ -114,6 +114,11 @@ type YUM interface { //nolint:interfacebloat
 	//kun:op GET /repository/sync
 	//kun:success statusCode=200
 	SyncRepository(ctx context.Context, repository string, wait bool) (err error)
+
+	// Sync YUM repository with an upstream repository using a specified URL.
+	//kun:op GET /repository/sync:url
+	//kun:success statusCode=200
+	SyncRepositoryWithURL(ctx context.Context, repository, mirrorURL string, wait bool) (err error)
 
 	// Get YUM repository sync status.
 	//kun:op GET /repository/sync:status
