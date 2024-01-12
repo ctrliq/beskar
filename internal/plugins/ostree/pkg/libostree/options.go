@@ -15,10 +15,10 @@ import "unsafe"
 
 // Option defines an option for pulling ostree repos.
 // It is used to build a *C.GVariant via a *C.GVariantBuilder.
-// free is an optional function that frees the memory allocated by the option. free may be called more than once.
+// deferFree is an optional function that frees the memory allocated by the option. deferFree may be called more than once.
 type (
-	Option   func(builder *C.GVariantBuilder, free freeFunc)
-	freeFunc func(...unsafe.Pointer)
+	Option         func(builder *C.GVariantBuilder, deferFree deferredFreeFn)
+	deferredFreeFn func(...unsafe.Pointer)
 )
 
 // ToGVariant converts the given Options to a GVariant using a GVaraintBuilder.
@@ -35,12 +35,12 @@ func toGVariant(opts ...Option) *C.GVariant {
 
 	// Collect pointers to free later
 	var toFree []unsafe.Pointer
-	freeFn := func(ptrs ...unsafe.Pointer) {
+	deferFreeFn := func(ptrs ...unsafe.Pointer) {
 		toFree = append(toFree, ptrs...)
 	}
 
 	for _, opt := range opts {
-		opt(&builder, freeFn)
+		opt(&builder, deferFreeFn)
 	}
 	defer func() {
 		for i := 0; i < len(toFree); i++ {
@@ -58,9 +58,9 @@ func gVariantBuilderAddVariant(builder *C.GVariantBuilder, key *C.gchar, variant
 
 // NoGPGVerify sets the gpg-verify option to false in the pull options.
 func NoGPGVerify() Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("gpg-verify")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,

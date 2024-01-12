@@ -76,9 +76,9 @@ const (
 
 // Flags adds the given flags to the pull options.
 func Flags(flags FlagSet) Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("flags")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -90,12 +90,12 @@ func Flags(flags FlagSet) Option {
 // Refs adds the given refs to the pull options.
 // When pulling refs from a remote, only the specified refs will be pulled.
 func Refs(refs ...string) Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		cRefs := C.MakeRefArray(C.int(len(refs)))
-		free(unsafe.Pointer(cRefs))
+		deferFree(unsafe.Pointer(cRefs))
 		for i := 0; i < len(refs); i++ {
 			cRef := C.CString(refs[i])
-			free(unsafe.Pointer(cRef))
+			deferFree(unsafe.Pointer(cRef))
 			C.AppendRef(cRefs, C.int(i), cRef)
 		}
 		C.g_variant_builder_add_refs(
@@ -107,9 +107,9 @@ func Refs(refs ...string) Option {
 
 // NoGPGVerifySummary sets the gpg-verify-summary option to false in the pull options.
 func NoGPGVerifySummary() Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("gpg-verify-summary")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -121,13 +121,13 @@ func NoGPGVerifySummary() Option {
 // Depth sets the depth option to the given value in the pull options.
 // How far in the history to traverse; default is 0, -1 means infinite
 func Depth(depth int) Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		// 0 is the default depth so there is no need to add it to the builder.
 		if depth != 0 {
 			return
 		}
 		key := C.CString("depth")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -139,9 +139,9 @@ func Depth(depth int) Option {
 // DisableStaticDelta sets the disable-static-deltas option to true in the pull options.
 // Do not use static deltas.
 func DisableStaticDelta() Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("disable-static-deltas")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -153,9 +153,9 @@ func DisableStaticDelta() Option {
 // RequireStaticDelta sets the require-static-deltas option to true in the pull options.
 // Require static deltas.
 func RequireStaticDelta() Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("require-static-deltas")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -167,9 +167,9 @@ func RequireStaticDelta() Option {
 // DryRun sets the dry-run option to true in the pull options.
 // Only print information on what will be downloaded (requires static deltas).
 func DryRun() Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("dry-run")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -181,16 +181,16 @@ func DryRun() Option {
 // AppendUserAgent sets the append-user-agent option to the given value in the pull options.
 // Additional string to append to the user agent.
 func AppendUserAgent(appendUserAgent string) Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		// "" is the default so there is no need to add it to the builder.
 		if appendUserAgent == "" {
 			return
 		}
 
 		key := C.CString("append-user-agent")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		cAppendUserAgent := C.CString(appendUserAgent)
-		free(unsafe.Pointer(cAppendUserAgent))
+		deferFree(unsafe.Pointer(cAppendUserAgent))
 		gVariantBuilderAddVariant(
 			builder,
 			key,
@@ -202,9 +202,9 @@ func AppendUserAgent(appendUserAgent string) Option {
 // NetworkRetries sets the n-network-retries option to the given value in the pull options.
 // Number of times to retry each download on receiving.
 func NetworkRetries(n int) Option {
-	return func(builder *C.GVariantBuilder, free freeFunc) {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		key := C.CString("n-network-retries")
-		free(unsafe.Pointer(key))
+		deferFree(unsafe.Pointer(key))
 		gVariantBuilderAddVariant(
 			builder,
 			key,

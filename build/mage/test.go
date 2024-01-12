@@ -1,12 +1,12 @@
 package mage
 
+import "C"
 import (
 	"context"
-	"fmt"
-	"strings"
-
 	"dagger.io/dagger"
+	"fmt"
 	"github.com/magefile/mage/mg"
+	"strings"
 )
 
 type Test mg.Namespace
@@ -28,6 +28,16 @@ func (Test) Unit(ctx context.Context) error {
 		WithDirectory("/src", src).
 		WithWorkdir("/src").
 		With(goCache(client))
+
+	for _, config := range binaries {
+		for key, value := range config.buildEnv {
+			unitTest = unitTest.WithEnvVariable(key, value)
+		}
+
+		for _, execStmt := range config.buildExecStmts {
+			unitTest = unitTest.WithExec(execStmt)
+		}
+	}
 
 	unitTest = unitTest.WithExec([]string{
 		"go", "test", "-v", "-count=1", "./...",

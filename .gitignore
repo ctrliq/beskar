@@ -4,6 +4,7 @@ build/output
 vendor
 go.work.sum
 
-.idea
+
+*/.idea
 
 internal/plugins/ostree/pkg/libostree/testdata
