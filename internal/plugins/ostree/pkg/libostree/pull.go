@@ -123,7 +123,7 @@ func NoGPGVerifySummary() Option {
 func Depth(depth int) Option {
 	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
 		// 0 is the default depth so there is no need to add it to the builder.
-		if depth != 0 {
+		if depth == 0 {
 			return
 		}
 		key := C.CString("depth")
