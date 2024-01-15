@@ -31,6 +31,10 @@ type Cache struct {
 	Size uint32 `yaml:"size"`
 }
 
+type Router struct {
+	BodyLimit int64 `yaml:"bodylimit"`
+}
+
 type BeskarConfig struct {
 	Version   string                       `yaml:"version"`
 	Profiling bool                         `yaml:"profiling"`
@@ -38,6 +42,7 @@ type BeskarConfig struct {
 	Cache     Cache                        `yaml:"cache"`
 	Gossip    gossip.Config                `yaml:"gossip"`
 	Registry  *configuration.Configuration `yaml:"registry"`
+	Router    Router                       `yaml:"router"`
 }
 
 type BeskarConfigV1 BeskarConfig

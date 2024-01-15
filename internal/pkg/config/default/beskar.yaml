@@ -11,6 +11,9 @@ gossip:
   key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
   peers: []
 
+router:
+  bodyLimit: 8192
+
 # hostname returned to plugins to access registry service,
 # automatically set when deployed on kubernetes
 hostname: localhost
