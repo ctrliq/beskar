@@ -16,6 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+/*
+The testdata directory contains a simple ostree repo that can be used for testing. It was created using the generate-testdata.sh
+script. testdata has been committed to this git repo so that it remains static. If you need to regenerate the testdata you can,
+however, keep in mind that newer versions of ostree may produce different results and may cause tests to fail. The version
+of ostree used to generate the testdata is 2023.7.
+*/
 func TestMain(m *testing.M) {
 	_, err := os.Stat("testdata/repo/summary")
 	if os.IsNotExist(err) {

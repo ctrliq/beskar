@@ -6,6 +6,4 @@ go.work.sum
 
 
 */.idea
-
-internal/plugins/ostree/pkg/libostree/testdata
 /.idea/

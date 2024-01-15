@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# This script generates test data for the ostree plugin.
+# This script generates test data for libostree.
 
 # Clean up any existing test data
 rm -rf testdata
