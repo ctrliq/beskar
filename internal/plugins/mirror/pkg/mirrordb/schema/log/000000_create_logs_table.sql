@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level TEXT,
+    date INTEGER,
+    message TEXT
+);

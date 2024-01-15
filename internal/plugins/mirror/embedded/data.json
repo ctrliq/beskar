@@ -1,0 +1,27 @@
+{
+    "routes": [
+        {
+            "pattern": "^/(artifacts/mirror/[a-z0-9]+(?:[/._-][a-z0-9]+)*)/file/([^/]+)$",
+            "methods": [
+                "GET",
+                "HEAD"
+            ]
+        },
+        {
+            "pattern": "^/artifacts/mirror/web/v1/(.*)$",
+            "body": false
+        },
+        {
+            "pattern": "^/artifacts/mirror/api/v1/doc/(.*)$",
+            "body": false
+        },
+        {
+            "pattern": "^/artifacts/mirror/api/v1/(.*)$",
+            "body": true,
+            "body_key": "repository"
+        }
+    ],
+    "mediatype": {
+        "file": "application/vnd.ciq.mirror.v1.file"
+    }
+}

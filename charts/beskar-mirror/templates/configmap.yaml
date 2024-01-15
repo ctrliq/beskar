@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "beskar-mirror.fullname" . }}-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "beskar-mirror.labels" . | nindent 4 }}
+data:
+  beskar-mirror.yaml: |-
+{{ toYaml .Values.configData | indent 4 }}

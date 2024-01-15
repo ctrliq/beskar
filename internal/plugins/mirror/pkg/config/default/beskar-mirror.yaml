@@ -1,0 +1,37 @@
+version: 1.0
+
+addr: 0.0.0.0:5500
+
+log:
+  level: debug
+  format: json
+
+profiling: true
+datadir: /tmp/beskar-mirror
+
+gossip:
+  addr: 0.0.0.0:5501
+  key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
+  peers:
+    - 127.0.0.1:5102
+
+storage:
+  driver: filesystem
+  prefix: ""
+  s3:
+    endpoint: 127.0.0.1:9100
+    bucket: beskar-mirror
+    access-key-id: minioadmin
+    secret-access-key: minioadmin
+    session-token:
+    region: us-east-1
+    disable-ssl: true
+  filesystem:
+    directory: /tmp/beskar-mirror
+  gcs:
+    bucket: beskar-mirror
+    keyfile: /path/to/keyfile
+  azure:
+    container: beskar-mirror
+    account-name: account_name
+    account-key: base64_encoded_account_key
