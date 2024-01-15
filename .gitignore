@@ -3,3 +3,7 @@ build/output
 .envrc.local
 vendor
 go.work.sum
+
+
+*/.idea
+/.idea/

@@ -55,6 +55,8 @@ type binaryConfig struct {
 	buildTags         []string
 	baseImage         string
 	integrationTest   *integrationTest
+	buildEnv          map[string]string
+	buildExecStmts    [][]string
 }
 
 const (
@@ -62,6 +64,7 @@ const (
 	BeskarctlBinary    = "beskarctl"
 	BeskarYUMBinary    = "beskar-yum"
 	BeskarStaticBinary = "beskar-static"
+	BeskarOSTreeBinary = "beskar-ostree"
 )
 
 var binaries = map[string]binaryConfig{
@@ -101,7 +104,7 @@ var binaries = map[string]binaryConfig{
 		},
 		useProto: true,
 		// NOTE: restore in case alpine createrepo_c package is broken again
-		//baseImage: "debian:bullseye-slim",
+		// baseImage: "debian:bullseye-slim",
 		integrationTest: &integrationTest{
 			isPlugin: true,
 			envs: map[string]string{
@@ -128,6 +131,46 @@ var binaries = map[string]binaryConfig{
 				"BESKARSTATIC_GOSSIP_ADDR":                  "127.0.0.1:5301",
 				"BESKARSTATIC_STORAGE_FILESYSTEM_DIRECTORY": "/tmp/integration/beskar-static",
 			},
+		},
+	},
+	BeskarOSTreeBinary: {
+		configFiles: map[string]string{
+			"internal/plugins/ostree/pkg/config/default/beskar-ostree.yaml": "/etc/beskar/beskar-ostree.yaml",
+		},
+		genAPI: &genAPI{
+			path:          "pkg/plugins/ostree/api/v1",
+			filename:      "api.go",
+			interfaceName: "OSTree",
+		},
+		useProto: true,
+		execStmts: [][]string{
+			{
+				"apk", "add", "ostree", "ostree-dev",
+			},
+		},
+		buildExecStmts: [][]string{
+			{
+				// pkg-config is needed to compute CFLAGS
+				"apk", "add", "pkgconfig",
+			},
+			{
+				// Install gcc. Could have installed gc directly but this seems to be the recommended way for alpine.
+				"apk", "add", "build-base",
+			},
+			{
+				// Install ostree development libraries
+				"apk", "add", "ostree", "ostree-dev",
+			},
+		},
+		buildEnv: map[string]string{
+			"CGO_ENABLED": "1",
+		},
+		excludedPlatforms: map[dagger.Platform]struct{}{
+			"linux/arm64":   {},
+			"linux/s390x":   {},
+			"linux/ppc64le": {},
+			"linux/arm/v6":  {},
+			"linux/arm/v7":  {},
 		},
 	},
 }
@@ -170,6 +213,7 @@ func (b Build) Plugins(ctx context.Context) {
 		ctx,
 		mg.F(b.Plugin, BeskarYUMBinary),
 		mg.F(b.Plugin, BeskarStaticBinary),
+		mg.F(b.Plugin, BeskarOSTreeBinary),
 	)
 }
 
@@ -272,6 +316,14 @@ func (b Build) build(ctx context.Context, name string) error {
 
 		for key, value := range envs {
 			golang = golang.WithEnvVariable(key, value)
+		}
+
+		for key, value := range binaryConfig.buildEnv {
+			golang = golang.WithEnvVariable(key, value)
+		}
+
+		for _, execStmt := range binaryConfig.buildExecStmts {
+			golang = golang.WithExec(execStmt)
 		}
 
 		path := filepath.Join("/output", binary)

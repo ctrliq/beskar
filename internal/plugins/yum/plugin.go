@@ -127,7 +127,7 @@ func (p *Plugin) Start(transport http.RoundTripper, _ *mtls.CAPEM, beskarMeta *g
 	p.config.Router.Route(
 		"/artifacts/yum/api/v1",
 		func(r chi.Router) {
-			r.Use(p.apiMiddleware)
+			r.Use(pluginsrv.IsTLSMiddleware)
 			r.Mount("/", apiv1.NewHTTPRouter(
 				p,
 				httpcodec.NewDefaultCodecs(nil),
@@ -148,13 +148,4 @@ func (p *Plugin) Context() context.Context {
 
 func (p *Plugin) RepositoryManager() *repository.Manager[*yumrepository.Handler] {
 	return p.repositoryManager
-}
-
-func (p *Plugin) apiMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !pluginsrv.IsTLS(w, r) {
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }

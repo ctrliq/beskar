@@ -36,6 +36,18 @@ func (Lint) Go(ctx context.Context) error {
 		WithWorkdir("/src").
 		With(goCache(client))
 
+	// Set up the environment for the linter per the settings of each binary.
+	// This could lead to conflicts if the binaries have different settings.
+	for _, config := range binaries {
+		for key, value := range config.buildEnv {
+			golangciLint = golangciLint.WithEnvVariable(key, value)
+		}
+
+		for _, execStmt := range config.buildExecStmts {
+			golangciLint = golangciLint.WithExec(execStmt)
+		}
+	}
+
 	golangciLint = golangciLint.WithExec([]string{
 		"golangci-lint", "-v", "run", "--modules-download-mode", "readonly", "--timeout", "5m",
 	})

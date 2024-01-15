@@ -11,10 +11,11 @@ import (
 	"os"
 	"syscall"
 
+	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumrepository"
+
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/yum"
 	"go.ciq.dev/beskar/internal/plugins/yum/pkg/config"
-	"go.ciq.dev/beskar/internal/plugins/yum/pkg/yumrepository"
 	"go.ciq.dev/beskar/pkg/sighandler"
 	"go.ciq.dev/beskar/pkg/version"
 )

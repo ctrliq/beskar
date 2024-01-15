@@ -11,10 +11,11 @@ import (
 	"os"
 	"syscall"
 
+	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
+
 	"go.ciq.dev/beskar/internal/pkg/pluginsrv"
 	"go.ciq.dev/beskar/internal/plugins/static"
 	"go.ciq.dev/beskar/internal/plugins/static/pkg/config"
-	"go.ciq.dev/beskar/internal/plugins/static/pkg/staticrepository"
 	"go.ciq.dev/beskar/pkg/sighandler"
 	"go.ciq.dev/beskar/pkg/version"
 )

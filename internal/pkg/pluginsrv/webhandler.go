@@ -29,8 +29,19 @@ func IsTLS(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+// IsTLSMiddleware is a middleware that checks if the request is TLS. This is a convenience wrapper around IsTLS.
+func IsTLSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !IsTLS(w, r) {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (wh *webHandler[H]) event(w http.ResponseWriter, r *http.Request) {
-	if !IsTLS(w, r) {
+	if wh.manager == nil {
+		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
@@ -85,10 +96,6 @@ func (wh *webHandler[H]) event(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wh *webHandler[H]) info(w http.ResponseWriter, r *http.Request) {
-	if !IsTLS(w, r) {
-		return
-	}
-
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusNotImplemented)
 		return

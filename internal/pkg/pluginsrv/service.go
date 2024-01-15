@@ -37,9 +37,17 @@ type Config struct {
 }
 
 type Service[H repository.Handler] interface {
+	// Start starts the service's HTTP server.
 	Start(http.RoundTripper, *mtls.CAPEM, *gossip.BeskarMeta) error
+
+	// Context returns the service's context.
 	Context() context.Context
+
+	// Config returns the service's configuration.
 	Config() Config
+
+	// RepositoryManager returns the service's repository manager.
+	// For plugin's without a repository manager, this method should return nil.
 	RepositoryManager() *repository.Manager[H]
 }
 
@@ -96,6 +104,23 @@ func Serve[H repository.Handler](ln net.Listener, service Service[H]) (errFn err
 	}
 
 	repoManager := service.RepositoryManager()
+	if repoManager != nil {
+		// Gracefully shutdown repository handlers
+		defer func() {
+			var wg sync.WaitGroup
+			for name, handler := range repoManager.GetAll() {
+				wg.Add(1)
+
+				go func(name string, handler repository.Handler) {
+					logger.Info("stopping repository handler", "repository", name)
+					handler.Stop()
+					logger.Info("repository handler stopped", "repository", name)
+					wg.Done()
+				}(name, handler)
+			}
+			wg.Wait()
+		}()
+	}
 
 	ticker := time.NewTicker(time.Second * 5)
 
@@ -112,8 +137,8 @@ func Serve[H repository.Handler](ln net.Listener, service Service[H]) (errFn err
 			manager:    repoManager,
 		}
 
-		serviceConfig.Router.HandleFunc("/event", http.HandlerFunc(wh.event))
-		serviceConfig.Router.HandleFunc("/info", http.HandlerFunc(wh.info))
+		serviceConfig.Router.With(IsTLSMiddleware).HandleFunc("/event", wh.event)
+		serviceConfig.Router.With(IsTLSMiddleware).HandleFunc("/info", wh.info)
 
 		transport, err := getBeskarTransport(caPEM, beskarMeta)
 		if err != nil {
@@ -141,21 +166,6 @@ func Serve[H repository.Handler](ln net.Listener, service Service[H]) (errFn err
 	}
 
 	_ = server.Shutdown(ctx)
-
-	var wg sync.WaitGroup
-
-	for name, handler := range repoManager.GetAll() {
-		wg.Add(1)
-
-		go func(name string, handler repository.Handler) {
-			logger.Info("stopping repository handler", "repository", name)
-			handler.Stop()
-			logger.Info("repository handler stopped", "repository", name)
-			wg.Done()
-		}(name, handler)
-	}
-
-	wg.Wait()
 
 	return serverErr
 }
