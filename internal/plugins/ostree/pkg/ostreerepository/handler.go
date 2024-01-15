@@ -83,14 +83,14 @@ func (h *Handler) setState(state State) error {
 	}
 	h._state.Swap(int32(state))
 	if state == StateSyncing || current == StateSyncing {
-		h.updateSyncing(state == StateSyncing)
+		_ = h.updateSyncing(state == StateSyncing)
 	}
 	return nil
 }
 
 func (h *Handler) clearState() {
 	h._state.Swap(int32(StateReady))
-	h.updateSyncing(false)
+	_ = h.updateSyncing(false)
 }
 
 func (h *Handler) getState() State {
@@ -120,6 +120,7 @@ func (h *Handler) Start(ctx context.Context) {
 
 	go func() {
 		for !h.Stopped.Load() {
+			//nolint: gosimple
 			select {
 			case <-ctx.Done():
 				h.Stopped.Store(true)
@@ -130,10 +131,15 @@ func (h *Handler) Start(ctx context.Context) {
 }
 
 // pullConfig pulls the config file from beskar.
-func (h *Handler) pullFile(_ context.Context, filename string) error {
+func (h *Handler) pullFile(ctx context.Context, filename string) error {
 	// TODO: Replace with appropriate puller mechanism
 	url := "http://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo", filename)
-	resp, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req = req.WithContext(ctx)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}

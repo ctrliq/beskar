@@ -150,9 +150,15 @@ var binaries = map[string]binaryConfig{
 		},
 		buildExecStmts: [][]string{
 			{
+				// pkg-config is needed to compute CFLAGS
+				"apk", "add", "pkgconfig",
+			},
+			{
+				// Install gcc. Could have installed gc directly but this seems to be the recommended way for alpine.
 				"apk", "add", "build-base",
 			},
 			{
+				// Install ostree development libraries
 				"apk", "add", "ostree", "ostree-dev",
 			},
 		},

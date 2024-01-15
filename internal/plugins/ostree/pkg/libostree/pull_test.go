@@ -113,7 +113,7 @@ func TestRepo_Pull(t *testing.T) {
 				err := repo.Pull(
 					ctx,
 					remoteName,
-					Flags(Mirror|TrustedHttp),
+					Flags(Mirror|TrustedHTTP),
 				)
 				assert.Error(t, err)
 				if err == nil {
@@ -126,7 +126,7 @@ func TestRepo_Pull(t *testing.T) {
 				err := repo.Pull(
 					context.TODO(),
 					remoteName,
-					Flags(Mirror|TrustedHttp),
+					Flags(Mirror|TrustedHTTP),
 				)
 				assert.NoError(t, err)
 				if err != nil {
@@ -146,7 +146,7 @@ func TestRepo_Pull(t *testing.T) {
 				expectedChecksums[strings.TrimRight(string(test1Data), "\n")] = false
 				expectedChecksums[strings.TrimRight(string(test2Data), "\n")] = false
 
-				refs, err := repo.ListRefsExt(ListRefsExtFlags_None)
+				refs, err := repo.ListRefsExt(ListRefsExtFlagsNone)
 				assert.NoError(t, err)
 				if err != nil {
 					assert.Failf(t, "failed to list refs", "err: %s", err.Error())

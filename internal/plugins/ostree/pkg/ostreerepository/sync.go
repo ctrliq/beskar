@@ -19,6 +19,7 @@ func (h *Handler) setRepoSync(repoSync *RepoSync) {
 	h.repoSync.Store(&rs)
 }
 
+//nolint:unparam
 func (h *Handler) updateSyncing(syncing bool) *RepoSync {
 	if h.repoSync.Load() == nil {
 		h.repoSync.Store(&RepoSync{})

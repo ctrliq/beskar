@@ -161,7 +161,7 @@ func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemotePrope
 	}, SkipPull())
 }
 
-func (h *Handler) SyncRepository(ctx context.Context, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
+func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
 	// Transition to syncing state
 	if err := h.setState(StateSyncing); err != nil {
 		return err
@@ -191,7 +191,7 @@ func (h *Handler) SyncRepository(ctx context.Context, properties *apiv1.OSTreeRe
 			// Pull the latest changes from the remote.
 			opts := []libostree.Option{
 				libostree.Depth(properties.Depth),
-				libostree.Flags(libostree.Mirror | libostree.TrustedHttp),
+				libostree.Flags(libostree.Mirror | libostree.TrustedHTTP),
 			}
 			if len(properties.Refs) > 0 {
 				opts = append(opts, libostree.Refs(properties.Refs...))

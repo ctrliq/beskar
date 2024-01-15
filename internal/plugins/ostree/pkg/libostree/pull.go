@@ -1,11 +1,9 @@
+//nolint:goheader
 // SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package libostree
 
-// #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
-// #include <stdlib.h>
-// #include <glib.h>
 // #include <ostree.h>
 // #include "pull.go.h"
 import "C"
@@ -28,6 +26,7 @@ func (r *Repo) Pull(ctx context.Context, remote string, opts ...Option) error {
 
 	cCancel := C.g_cancellable_new()
 	go func() {
+		//nolint:gosimple
 		for {
 			select {
 			case <-ctx.Done():
@@ -67,8 +66,8 @@ const (
 	// BaseUserOnlyFiles - Since 2017.7.  Reject writes of content objects with modes outside of 0775.
 	BaseUserOnlyFiles
 
-	// TrustedHttp - Don't verify checksums of objects HTTP repositories (Since: 2017.12)
-	TrustedHttp
+	// TrustedHTTP - Don't verify checksums of objects HTTP repositories (Since: 2017.12)
+	TrustedHTTP
 
 	// None - No special options for pull
 	None = 0

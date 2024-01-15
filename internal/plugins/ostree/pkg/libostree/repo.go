@@ -1,13 +1,10 @@
+//nolint:goheader
 // SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package libostree
 
-// #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
-// #include <stdlib.h>
 // #include <glib.h>
-// #include <glib-object.h>
-// #include <gio/gio.h>
 // #include <ostree.h>
 import "C"
 
@@ -252,10 +249,10 @@ func (r *Repo) ListRemotes() []string {
 type ListRefsExtFlags int
 
 const (
-	ListRefsExtFlags_Aliases = 1 << iota
-	ListRefsExtFlags_ExcludeRemotes
-	ListRefsExtFlags_ExcludeMirrors
-	ListRefsExtFlags_None ListRefsExtFlags = 0
+	ListRefsExtFlagsAliases = 1 << iota
+	ListRefsExtFlagsExcludeRemotes
+	ListRefsExtFlagsExcludeMirrors
+	ListRefsExtFlagsNone ListRefsExtFlags = 0
 )
 
 type Ref struct {
@@ -299,7 +296,7 @@ func (r *Repo) ListRefsExt(flags ListRefsExtFlags, prefix ...string) ([]Ref, err
 		ref := (*C.OstreeCollectionRef)(unsafe.Pointer(&cRef))
 
 		ret = append(ret, Ref{
-			Name:     C.GoString((*C.char)((*C.gchar)(ref.ref_name))),
+			Name:     C.GoString(ref.ref_name),
 			Checksum: C.GoString((*C.char)(cChecksum)),
 		})
 	}

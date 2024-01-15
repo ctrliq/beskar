@@ -1,14 +1,9 @@
+//nolint:goheader
 // SPDX-FileCopyrightText: Copyright (c) 2023-2024, CIQ, Inc. All rights reserved
 // SPDX-License-Identifier: Apache-2.0
 
 package libostree
 
-// #cgo pkg-config: ostree-1 glib-2.0 gobject-2.0
-// #include <stdlib.h>
-// #include <glib.h>
-// #include <glib-object.h>
-// #include <gio/gio.h>
-// #include <ostree.h>
 // #include "options.go.h"
 import "C"
 import "unsafe"
@@ -23,7 +18,7 @@ type (
 
 // ToGVariant converts the given Options to a GVariant using a GVaraintBuilder.
 func toGVariant(opts ...Option) *C.GVariant {
-	typeStr := (*C.gchar)(C.CString("a{sv}"))
+	typeStr := C.CString("a{sv}")
 	defer C.free(unsafe.Pointer(typeStr))
 
 	variantType := C.g_variant_type_new(typeStr)

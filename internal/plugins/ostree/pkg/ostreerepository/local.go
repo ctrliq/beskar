@@ -105,7 +105,7 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 			ctx,
 			beskarRemoteName,
 			libostree.NoGPGVerify(),
-			libostree.Flags(libostree.Mirror|libostree.TrustedHttp),
+			libostree.Flags(libostree.Mirror|libostree.TrustedHTTP),
 		); err != nil {
 			return ctl.Errf("pulling ostree repository from %s: %s", beskarRemoteName, err)
 		}
@@ -119,7 +119,6 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 
 	// Commit the changes to beskar if the transaction deems it necessary
 	if commit {
-
 		// Remove the internal beskar remote so that external clients can't pull from it, not that it would work.
 		if err := repo.DeleteRemote(beskarRemoteName); err != nil {
 			return ctl.Errf("deleting remote %s: %s", beskarRemoteName, err)
