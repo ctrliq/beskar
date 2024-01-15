@@ -28,6 +28,10 @@ func TestMain(m *testing.M) {
 		log.Fatalln("testdata/repo does not exist: please run ./generate-testdata.sh")
 	}
 
+	if err := os.MkdirAll("/tmp/libostree-pull_test", 0755); err != nil {
+		log.Fatalf("failed to create test directory: %s", err.Error())
+	}
+
 	os.Exit(m.Run())
 }
 
@@ -56,7 +60,7 @@ func TestRepo_Pull(t *testing.T) {
 	for _, mode := range modes {
 		mode := mode
 		repoName := fmt.Sprintf("repo-%s", mode)
-		repoPath := fmt.Sprintf("testdata/%s", repoName)
+		repoPath := fmt.Sprintf("/tmp/libostree-pull_test/%s", repoName)
 
 		t.Run(repoName, func(t *testing.T) {
 			t.Cleanup(func() {
