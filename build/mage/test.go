@@ -40,6 +40,8 @@ func (Test) Unit(ctx context.Context) error {
 
 	unitTest = unitTest.WithExec([]string{
 		"go", "test", "-v", "-count=1", "./...",
+	}, dagger.ContainerWithExecOpts{
+		InsecureRootCapabilities: true,
 	})
 
 	return printOutput(ctx, unitTest)
