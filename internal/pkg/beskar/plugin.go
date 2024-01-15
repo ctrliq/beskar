@@ -28,6 +28,7 @@ import (
 	"github.com/distribution/distribution/v3"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
+	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/internal/pkg/gossip"
 	"go.ciq.dev/beskar/internal/pkg/router"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
@@ -123,7 +124,7 @@ func (pm *pluginManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pl.ServeHTTP(w, r)
 }
 
-func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta) error {
+func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta, beskarConfig *config.BeskarConfig) error {
 	hostport := net.JoinHostPort(node.Addr.String(), strconv.Itoa(int(meta.ServicePort)))
 	info, err := pm.getPluginInfo(hostport)
 	if err != nil {
@@ -151,7 +152,7 @@ func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta
 			logger:       pm.logger,
 		}
 
-		if err := pl.initRouter(info); err != nil {
+		if err := pl.initRouter(info, beskarConfig.Router.BodyLimit); err != nil {
 			return err
 		}
 
@@ -165,7 +166,7 @@ func (pm *pluginManager) register(node *memberlist.Node, meta *gossip.BeskarMeta
 		pl.version = info.Version
 		pl.mediaTypes = mediaTypes
 
-		if err := pl.initRouter(info); err != nil {
+		if err := pl.initRouter(info, beskarConfig.Router.BodyLimit); err != nil {
 			return err
 		}
 	}
@@ -351,7 +352,7 @@ func (p *plugin) sendEvent(ctx context.Context, event *eventv1.EventPayload, nod
 	}, backoff.WithContext(eb, ctx))
 }
 
-func (p *plugin) initRouter(info *pluginv1.Info) error {
+func (p *plugin) initRouter(info *pluginv1.Info, bodyLimit int64) error {
 	var routerOptions []router.RegoRouterOption
 
 	if info.Router == nil {
@@ -359,6 +360,9 @@ func (p *plugin) initRouter(info *pluginv1.Info) error {
 	}
 	if len(info.Router.Data) > 0 {
 		routerOptions = append(routerOptions, router.WithData(bytes.NewReader(info.Router.Data)))
+	}
+	if bodyLimit > 0 {
+		routerOptions = append(routerOptions, router.WithBodyLimit(bodyLimit))
 	}
 	rr, err := router.New(info.Name, string(info.Router.Rego), routerOptions...)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/distribution/distribution/v3"
 	"github.com/distribution/reference"
@@ -28,6 +27,7 @@ type funcContext struct {
 	req        *http.Request
 	registry   distribution.Namespace
 	builtinErr error
+	bodyLimit  int64
 }
 
 var ociBlobDigestBuiltin = rego.Function3(
@@ -129,22 +129,6 @@ var ociBlobDigestBuiltin = rego.Function3(
 	},
 )
 
-type bodyCloser struct {
-	io.Reader
-	closeFn func() error
-}
-
-func (bc bodyCloser) Close() error {
-	return bc.closeFn()
-}
-
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		buffer := make([]byte, 8192)
-		return &buffer
-	},
-}
-
 var requestBodyBuiltin = rego.FunctionDyn(
 	&rego.Function{
 		Name:             "request.body",
@@ -165,38 +149,33 @@ var requestBodyBuiltin = rego.FunctionDyn(
 			}
 		}()
 
-		if funcContext.req.Body != nil && funcContext.req.Body != http.NoBody {
-			buf := bufferPool.Get().(*[]byte)
-
-			n, err := io.ReadAtLeast(funcContext.req.Body, *buf, 1)
-			if err != nil {
-				return nil, fmt.Errorf("empty body request")
-			}
-
-			bodyReader := bytes.NewReader((*buf)[:n])
-
-			v, err := ast.ValueFromReader(bodyReader)
-			if err != nil {
-				return nil, err
-			}
-
-			_, _ = bodyReader.Seek(0, io.SeekStart)
-
-			originalBody := funcContext.req.Body
-
-			funcContext.req.Body = &bodyCloser{
-				Reader: bodyReader,
-				closeFn: func() error {
-					defer bufferPool.Put(buf)
-					return originalBody.Close()
-				},
-			}
-
-			return ast.NewTerm(v), nil
+		if funcContext.req.Body == nil || funcContext.req.Body == http.NoBody {
+			v, err := ast.InterfaceToValue(nil)
+			return ast.NewTerm(v), err
 		}
 
-		v, err := ast.InterfaceToValue(nil)
+		buf := new(bytes.Buffer)
 
-		return ast.NewTerm(v), err
+		// plugin API are receiving small JSON objects, so we limit it to 8KB by default
+		// configurable via beskar router configuration.
+		_, err := buf.ReadFrom(io.LimitReader(funcContext.req.Body, funcContext.bodyLimit))
+		if err != nil {
+			return nil, err
+		} else if err := funcContext.req.Body.Close(); err != nil {
+			return nil, err
+		}
+
+		bodyReader := bytes.NewReader(buf.Bytes())
+
+		v, err := ast.ValueFromReader(bodyReader)
+		if err != nil {
+			return nil, err
+		} else if _, err = bodyReader.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+
+		funcContext.req.Body = io.NopCloser(bodyReader)
+
+		return ast.NewTerm(v), nil
 	},
 )

@@ -158,7 +158,7 @@ func (br *Registry) startGossipWatcher() {
 						br.logger.Debugf("Added groupcache peer %s", peer)
 					case gossip.PluginInstance:
 						br.logger.Infof("Register plugin")
-						if err := br.pluginManager.register(node, meta); err != nil {
+						if err := br.pluginManager.register(node, meta, br.beskarConfig); err != nil {
 							br.logger.Errorf("plugin register error: %s", err)
 						}
 					}
@@ -182,7 +182,7 @@ func (br *Registry) startGossipWatcher() {
 						br.logger.Debugf("Added groupcache peer %s", peer)
 					case gossip.PluginInstance:
 						br.logger.Infof("Register plugin")
-						if err := br.pluginManager.register(node, meta); err != nil {
+						if err := br.pluginManager.register(node, meta, br.beskarConfig); err != nil {
 							br.logger.Errorf("plugin register error: %s", err)
 						}
 					}

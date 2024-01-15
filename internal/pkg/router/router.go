@@ -28,9 +28,10 @@ type Result struct {
 type RegoOption = func(r *rego.Rego)
 
 type RegoRouter struct {
-	name    string
-	options []RegoOption
-	peq     rego.PreparedEvalQuery
+	name      string
+	options   []RegoOption
+	peq       rego.PreparedEvalQuery
+	bodyLimit int64
 }
 
 type RegoRouterOption func(r *RegoRouter) error
@@ -59,6 +60,13 @@ func WithOption(option RegoOption) RegoRouterOption {
 	}
 }
 
+func WithBodyLimit(limit int64) RegoRouterOption {
+	return func(r *RegoRouter) error {
+		r.bodyLimit = limit
+		return nil
+	}
+}
+
 func New(name, module string, options ...RegoRouterOption) (_ *RegoRouter, err error) {
 	router := &RegoRouter{
 		name: name,
@@ -68,6 +76,7 @@ func New(name, module string, options ...RegoRouterOption) (_ *RegoRouter, err e
 			ociBlobDigestBuiltin,
 			requestBodyBuiltin,
 		},
+		bodyLimit: 8192,
 	}
 
 	for _, opt := range options {
@@ -86,8 +95,9 @@ func New(name, module string, options ...RegoRouterOption) (_ *RegoRouter, err e
 
 func (rr *RegoRouter) Decision(req *http.Request, registry distribution.Namespace) (*Result, error) {
 	fctx := &funcContext{
-		req:      req,
-		registry: registry,
+		req:       req,
+		registry:  registry,
+		bodyLimit: rr.bodyLimit,
 	}
 	ctx := context.WithValue(req.Context(), &funcContextKey, fctx)
 
