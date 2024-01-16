@@ -17,12 +17,13 @@ Docker images are available for various architecture via Github packages reposit
 * [beskar](https://github.com/ctrliq/beskar/pkgs/container/beskar)
 * [beskar-yum](https://github.com/ctrliq/beskar/pkgs/container/beskar-yum)
 * [beskar-static](https://github.com/ctrliq/beskar/pkgs/container/beskar-static)
+* [beskar-ostree](https://github.com/ctrliq/beskar/pkgs/container/beskar-ostree)
 
 ### Helm charts
 
 Helm charts are available [here](https://github.com/ctrliq/beskar/tree/main/charts).
 
-You call also pull charts directly for a specific release via Github packages by running:
+You can also pull charts directly for a specific release via Github packages by running:
 
 For beskar helm chart:
 
@@ -42,7 +43,7 @@ For beskar-static helm chart:
 helm pull oci://ghcr.io/ctrliq/helm-charts/beskar-static --version 0.0.1 --untar
 ```
 
-For beskar-static helm chart:
+For beskar-ostree helm chart:
 
 ```
 helm pull oci://ghcr.io/ctrliq/helm-charts/beskar-ostree --version 0.0.1 --untar
