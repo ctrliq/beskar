@@ -241,7 +241,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
+		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (commit bool, transactionFnErr error) {
 			// Pull the latest changes from the remote.
 			opts := []libostree.Option{
 				libostree.Depth(properties.Depth),
@@ -266,8 +266,12 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 				}
 
 				defer func() {
-					if err == nil {
-						err = repo.DeleteRemote(properties.EphemeralRemote.Name)
+					if transactionFnErr == nil {
+						if err := repo.DeleteRemote(properties.EphemeralRemote.Name); err != nil {
+							h.logger.Error("deleting ephemeral remote", "error", err.Error())
+							commit = false
+							transactionFnErr = err
+						}
 					}
 				}()
 			}
