@@ -161,6 +161,60 @@ func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemotePrope
 	}, SkipPull())
 }
 
+func (h *Handler) UpdateRemote(ctx context.Context, remoteName string, remote *apiv1.OSTreeRemoteProperties) (err error) {
+	// Transition to provisioning state
+	if err := h.setState(StateProvisioning); err != nil {
+		return err
+	}
+	defer h.clearState()
+
+	if !h.checkRepoExists(ctx) {
+		return ctl.Errf("repository does not exist")
+	}
+
+	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
+		// Delete user provided remote
+		if err := repo.DeleteRemote(remoteName); err != nil {
+			// No need to make error pretty, it is already pretty
+			return false, err
+		}
+
+		// Add user provided remote
+		var opts []libostree.Option
+		if remote.NoGPGVerify {
+			opts = append(opts, libostree.NoGPGVerify())
+		}
+		if err := repo.AddRemote(remote.Name, remote.RemoteURL, opts...); err != nil {
+			// No need to make error pretty, it is already pretty
+			return false, err
+		}
+
+		return true, nil
+	}, SkipPull())
+}
+
+func (h *Handler) DeleteRemote(ctx context.Context, remoteName string) (err error) {
+	// Transition to provisioning state
+	if err := h.setState(StateProvisioning); err != nil {
+		return err
+	}
+	defer h.clearState()
+
+	if !h.checkRepoExists(ctx) {
+		return ctl.Errf("repository does not exist")
+	}
+
+	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
+		// Delete user provided remote
+		if err := repo.DeleteRemote(remoteName); err != nil {
+			// No need to make error pretty, it is already pretty
+			return false, err
+		}
+
+		return true, nil
+	}, SkipPull())
+}
+
 func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
 	// Transition to syncing state
 	if err := h.setState(StateSyncing); err != nil {
@@ -187,7 +241,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
+		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (commit bool, transactionFnErr error) {
 			// Pull the latest changes from the remote.
 			opts := []libostree.Option{
 				libostree.Depth(properties.Depth),
@@ -197,8 +251,33 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 				opts = append(opts, libostree.Refs(properties.Refs...))
 			}
 
+			remoteName := properties.Remote
+			if properties.EphemeralRemote != nil {
+				remoteName = properties.EphemeralRemote.Name
+
+				var opts []libostree.Option
+				if properties.EphemeralRemote.NoGPGVerify {
+					opts = append(opts, libostree.NoGPGVerify())
+				}
+
+				if err := repo.AddRemote(properties.EphemeralRemote.Name, properties.EphemeralRemote.RemoteURL, opts...); err != nil {
+					// No need to make error pretty, it is already pretty
+					return false, err
+				}
+
+				defer func() {
+					if transactionFnErr == nil {
+						if err := repo.DeleteRemote(properties.EphemeralRemote.Name); err != nil {
+							h.logger.Error("deleting ephemeral remote", "error", err.Error())
+							commit = false
+							transactionFnErr = err
+						}
+					}
+				}()
+			}
+
 			// pull remote content into local repo
-			if err := repo.Pull(ctx, properties.Remote, opts...); err != nil {
+			if err := repo.Pull(ctx, remoteName, opts...); err != nil {
 				return false, ctl.Errf("pulling ostree repository: %s", err)
 			}
 

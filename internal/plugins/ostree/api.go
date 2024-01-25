@@ -43,6 +43,22 @@ func (p *Plugin) AddRemote(ctx context.Context, repository string, properties *a
 	return p.repositoryManager.Get(ctx, repository).AddRemote(ctx, properties)
 }
 
+func (p *Plugin) UpdateRemote(ctx context.Context, repository string, remoteName string, properties *apiv1.OSTreeRemoteProperties) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+
+	return p.repositoryManager.Get(ctx, repository).UpdateRemote(ctx, remoteName, properties)
+}
+
+func (p *Plugin) DeleteRemote(ctx context.Context, repository string, remoteName string) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+
+	return p.repositoryManager.Get(ctx, repository).DeleteRemote(ctx, remoteName)
+}
+
 func (p *Plugin) SyncRepository(ctx context.Context, repository string, properties *apiv1.OSTreeRepositorySyncRequest) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err

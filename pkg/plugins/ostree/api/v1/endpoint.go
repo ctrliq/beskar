@@ -85,6 +85,43 @@ func MakeEndpointOfCreateRepository(s OSTree) endpoint.Endpoint {
 	}
 }
 
+type DeleteRemoteRequest struct {
+	Repository string `json:"repository"`
+	RemoteName string `json:"remote_name"`
+}
+
+// ValidateDeleteRemoteRequest creates a validator for DeleteRemoteRequest.
+func ValidateDeleteRemoteRequest(newSchema func(*DeleteRemoteRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*DeleteRemoteRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type DeleteRemoteResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *DeleteRemoteResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *DeleteRemoteResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfDeleteRemote creates the endpoint for s.DeleteRemote.
+func MakeEndpointOfDeleteRemote(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*DeleteRemoteRequest)
+		err := s.DeleteRemote(
+			ctx,
+			req.Repository,
+			req.RemoteName,
+		)
+		return &DeleteRemoteResponse{
+			Err: err,
+		}, nil
+	}
+}
+
 type DeleteRepositoryRequest struct {
 	Repository string `json:"repository"`
 }
@@ -189,6 +226,45 @@ func MakeEndpointOfSyncRepository(s OSTree) endpoint.Endpoint {
 			req.Properties,
 		)
 		return &SyncRepositoryResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type UpdateRemoteRequest struct {
+	Repository string                  `json:"repository"`
+	RemoteName string                  `json:"remote_name"`
+	Properties *OSTreeRemoteProperties `json:"properties"`
+}
+
+// ValidateUpdateRemoteRequest creates a validator for UpdateRemoteRequest.
+func ValidateUpdateRemoteRequest(newSchema func(*UpdateRemoteRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*UpdateRemoteRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type UpdateRemoteResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *UpdateRemoteResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *UpdateRemoteResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfUpdateRemote creates the endpoint for s.UpdateRemote.
+func MakeEndpointOfUpdateRemote(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*UpdateRemoteRequest)
+		err := s.UpdateRemote(
+			ctx,
+			req.Repository,
+			req.RemoteName,
+			req.Properties,
+		)
+		return &UpdateRemoteResponse{
 			Err: err,
 		}, nil
 	}

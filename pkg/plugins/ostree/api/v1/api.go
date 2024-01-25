@@ -42,7 +42,12 @@ type OSTreeRemoteProperties struct {
 
 type OSTreeRepositorySyncRequest struct {
 	// Remote - The name of the remote to sync.
+	// Remote and EphemeralRemote are mutually exclusive. EphemeralRemote takes precedence.
 	Remote string `json:"remote"`
+
+	// EphemeralRemote - A remote to add to the repository in Beskar for the duration of the sync.
+	// Remote and EphemeralRemote are mutually exclusive. EphemeralRemote takes precedence.
+	EphemeralRemote *OSTreeRemoteProperties `json:"ephemeral_remote"`
 
 	// Refs - The branches/refs to mirror. Leave empty to mirror all branches/refs.
 	Refs []string `json:"refs"`
@@ -87,6 +92,16 @@ type OSTree interface {
 	//kun:op POST /repository/remote
 	//kun:success statusCode=200
 	AddRemote(ctx context.Context, repository string, properties *OSTreeRemoteProperties) (err error)
+
+	// Updates a remote in the OSTree repository. If it doesn't exist it will be created.
+	//kun:op PUT /repository/remote
+	//kun:success statusCode=200
+	UpdateRemote(ctx context.Context, repository string, remoteName string, properties *OSTreeRemoteProperties) (err error)
+
+	// Delete an existing remote to the OSTree repository.
+	//kun:op DELETE /repository/remote
+	//kun:success statusCode=200
+	DeleteRemote(ctx context.Context, repository string, remoteName string) (err error)
 
 	// Sync an ostree repository with one of the configured remotes.
 	//kun:op POST /repository/sync
