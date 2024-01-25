@@ -41,6 +41,28 @@ paths:
           schema:
             $ref: "#/definitions/AddRemoteRequestBody"
       %s
+    delete:
+      description: "Delete an existing remote to the OSTree repository."
+      operationId: "DeleteRemote"
+      tags:
+        - ostree
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/DeleteRemoteRequestBody"
+      %s
+    put:
+      description: "Updates a remote in the OSTree repository. If it doesn't exist it will be created."
+      operationId: "UpdateRemote"
+      tags:
+        - ostree
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/UpdateRemoteRequestBody"
+      %s
   /repository:
     post:
       description: "Create an OSTree repository."
@@ -93,6 +115,8 @@ paths:
 func getResponses(schema oas2.Schema) []oas2.OASResponses {
 	return []oas2.OASResponses{
 		oas2.GetOASResponses(schema, "AddRemote", 200, &AddRemoteResponse{}),
+		oas2.GetOASResponses(schema, "DeleteRemote", 200, &DeleteRemoteResponse{}),
+		oas2.GetOASResponses(schema, "UpdateRemote", 200, &UpdateRemoteResponse{}),
 		oas2.GetOASResponses(schema, "CreateRepository", 200, &CreateRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "DeleteRepository", 202, &DeleteRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncStatus", 200, &GetRepositorySyncStatusResponse{}),
@@ -115,6 +139,12 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "CreateRepository", 200, (&CreateRepositoryResponse{}).Body())
 
+	oas2.AddDefinition(defs, "DeleteRemoteRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		RemoteName string `json:"remote_name"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "DeleteRemote", 200, (&DeleteRemoteResponse{}).Body())
+
 	oas2.AddDefinition(defs, "DeleteRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
 	}{}))
@@ -130,6 +160,13 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		Properties *OSTreeRepositorySyncRequest `json:"properties"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 202, (&SyncRepositoryResponse{}).Body())
+
+	oas2.AddDefinition(defs, "UpdateRemoteRequestBody", reflect.ValueOf(&struct {
+		Repository string                  `json:"repository"`
+		RemoteName string                  `json:"remote_name"`
+		Properties *OSTreeRemoteProperties `json:"properties"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "UpdateRemote", 200, (&UpdateRemoteResponse{}).Body())
 
 	return defs
 }

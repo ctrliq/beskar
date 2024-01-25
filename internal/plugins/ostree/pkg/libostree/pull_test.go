@@ -111,6 +111,15 @@ func TestRepo_Pull(t *testing.T) {
 				assert.Error(t, err)
 			})
 
+			t.Run("should create then delete remote", func(t *testing.T) {
+				remoteToDelete := "delete-me"
+				err := repo.AddRemote(remoteToDelete, remoteURL, NoGPGVerify())
+				assert.NoError(t, err)
+
+				err = repo.DeleteRemote(remoteToDelete)
+				assert.NoError(t, err)
+			})
+
 			t.Run("should list remotes", func(t *testing.T) {
 				remotes := repo.ListRemotes()
 				assert.Equal(t, remotes, []string{remoteName})

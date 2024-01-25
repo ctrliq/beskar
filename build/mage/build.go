@@ -166,7 +166,6 @@ var binaries = map[string]binaryConfig{
 			"CGO_ENABLED": "1",
 		},
 		excludedPlatforms: map[dagger.Platform]struct{}{
-			"linux/arm64":   {},
 			"linux/s390x":   {},
 			"linux/ppc64le": {},
 			"linux/arm/v6":  {},

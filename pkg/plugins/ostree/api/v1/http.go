@@ -52,6 +52,20 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		),
 	)
 
+	codec = codecs.EncodeDecoder("DeleteRemote")
+	validator = options.RequestValidator("DeleteRemote")
+	r.Method(
+		"DELETE", "/repository/remote",
+		kithttp.NewServer(
+			MakeEndpointOfDeleteRemote(svc),
+			decodeDeleteRemoteRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	codec = codecs.EncodeDecoder("DeleteRepository")
 	validator = options.RequestValidator("DeleteRepository")
 	r.Method(
@@ -94,6 +108,20 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		),
 	)
 
+	codec = codecs.EncodeDecoder("UpdateRemote")
+	validator = options.RequestValidator("UpdateRemote")
+	r.Method(
+		"PUT", "/repository/remote",
+		kithttp.NewServer(
+			MakeEndpointOfUpdateRemote(svc),
+			decodeUpdateRemoteRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	return r
 }
 
@@ -116,6 +144,22 @@ func decodeAddRemoteRequest(codec httpcodec.Codec, validator httpoption.Validato
 func decodeCreateRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req CreateRepositoryRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeDeleteRemoteRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req DeleteRemoteRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err
@@ -164,6 +208,22 @@ func decodeGetRepositorySyncStatusRequest(codec httpcodec.Codec, validator httpo
 func decodeSyncRepositoryRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req SyncRepositoryRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeUpdateRemoteRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req UpdateRemoteRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err
