@@ -294,11 +294,8 @@ func (r *Repo) ListRefsExt(flags ListRefsExtFlags, prefix ...string) ([]Ref, err
 			break
 		}
 
-		// GHashTable
-		//ref := (*C.OstreeCollectionRef)(unsafe.Pointer(&cRef))
-
 		ret = append(ret, Ref{
-			Name:     C.GoString((*C.char)(cRef)), //C.GoString(ref.ref_name),
+			Name:     C.GoString((*C.char)(cRef)),
 			Checksum: C.GoString((*C.char)(cChecksum)),
 		})
 	}

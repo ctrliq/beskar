@@ -35,6 +35,14 @@ func (p *Plugin) DeleteRepository(ctx context.Context, repository string) (err e
 	return p.repositoryManager.Get(ctx, repository).DeleteRepository(ctx)
 }
 
+func (p *Plugin) ListRepositoryRefs(ctx context.Context, repository string) (refs []apiv1.OSTreeRef, err error) {
+	if err := checkRepository(repository); err != nil {
+		return nil, err
+	}
+
+	return p.repositoryManager.Get(ctx, repository).ListRepositoryRefs(ctx, repository)
+}
+
 func (p *Plugin) AddRemote(ctx context.Context, repository string, properties *apiv1.OSTreeRemoteProperties) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err

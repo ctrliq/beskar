@@ -109,6 +109,18 @@ paths:
           schema:
             $ref: "#/definitions/SyncRepositoryRequestBody"
       %s
+  /repository/refs:
+    get:
+      description: "List OSTree repository refs (A.K.A. Branches)."
+      operationId: "ListRepositoryRefs"
+      tags:
+        - ostree
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/ListRepositoryRefsRequestBody"
+      %s
 `
 )
 
@@ -121,6 +133,7 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "DeleteRepository", 202, &DeleteRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncStatus", 200, &GetRepositorySyncStatusResponse{}),
 		oas2.GetOASResponses(schema, "SyncRepository", 202, &SyncRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "ListRepositoryRefs", 200, &ListRepositoryRefsResponse{}),
 	}
 }
 
@@ -154,6 +167,11 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		Repository string `json:"repository"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "GetRepositorySyncStatus", 200, (&GetRepositorySyncStatusResponse{}).Body())
+
+	oas2.AddDefinition(defs, "ListRepositoryRefsRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "ListRepositoryRefs", 200, (&ListRepositoryRefsResponse{}).Body())
 
 	oas2.AddDefinition(defs, "SyncRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string                       `json:"repository"`

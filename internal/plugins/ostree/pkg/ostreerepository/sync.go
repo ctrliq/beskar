@@ -5,13 +5,16 @@ package ostreerepository
 
 import (
 	"time"
+
+	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
 )
 
 type RepoSync struct {
-	Syncing   bool
-	StartTime int64
-	EndTime   int64
-	SyncError string
+	Syncing    bool
+	StartTime  int64
+	EndTime    int64
+	SyncError  string
+	SyncedRefs []libostree.Ref
 }
 
 func (h *Handler) setRepoSync(repoSync *RepoSync) {
