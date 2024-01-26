@@ -135,7 +135,7 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *Handler) ListRepositoryRefs(ctx context.Context, repository string) (refs []apiv1.OSTreeRef, err error) {
+func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRef, err error) {
 	// Transition to provisioning state
 	if err := h.setState(StateProvisioning); err != nil {
 		return nil, err
