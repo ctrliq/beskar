@@ -86,3 +86,17 @@ jobs:
         run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-ostree:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
       - name: Release beskar-ostree helm chart
         run: ./scripts/mage ci:chart ghcr.io/ctrliq/helm-charts/beskar-ostree:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
+
+  release-beskar-mirror:
+    name: release beskar-mirror
+    needs: [lint, tests]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+      - uses: actions/checkout@v3
+      - name: Release beskar-mirror image
+        run: ./scripts/mage ci:image ghcr.io/ctrliq/beskar-mirror:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
+      - name: Release beskar-mirror helm chart
+        run: ./scripts/mage ci:chart ghcr.io/ctrliq/helm-charts/beskar-mirror:${{ github.ref_name }} "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}"
