@@ -65,6 +65,7 @@ const (
 	BeskarYUMBinary    = "beskar-yum"
 	BeskarStaticBinary = "beskar-static"
 	BeskarOSTreeBinary = "beskar-ostree"
+	BeskarMirrorBinary = "beskar-mirror"
 )
 
 var binaries = map[string]binaryConfig{
@@ -172,6 +173,25 @@ var binaries = map[string]binaryConfig{
 			"linux/arm/v7":  {},
 		},
 	},
+	BeskarMirrorBinary: {
+		configFiles: map[string]string{
+			"internal/plugins/mirror/pkg/config/default/beskar-mirror.yaml": "/etc/beskar/beskar-mirror.yaml",
+		},
+		genAPI: &genAPI{
+			path:          "pkg/plugins/mirror/api/v1",
+			filename:      "api.go",
+			interfaceName: "Mirror",
+		},
+		useProto: true,
+		integrationTest: &integrationTest{
+			isPlugin: true,
+			envs: map[string]string{
+				"BESKARMIRROR_ADDR":                         "127.0.0.1:5500",
+				"BESKARMIRROR_GOSSIP_ADDR":                  "127.0.0.1:5501",
+				"BESKARMIRROR_STORAGE_FILESYSTEM_DIRECTORY": "/tmp/integration/beskar-mirror",
+			},
+		},
+	},
 }
 
 type Build mg.Namespace
@@ -213,6 +233,7 @@ func (b Build) Plugins(ctx context.Context) {
 		mg.F(b.Plugin, BeskarYUMBinary),
 		mg.F(b.Plugin, BeskarStaticBinary),
 		mg.F(b.Plugin, BeskarOSTreeBinary),
+		mg.F(b.Plugin, BeskarMirrorBinary),
 	)
 }
 
