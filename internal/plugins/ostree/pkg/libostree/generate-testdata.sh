@@ -14,11 +14,11 @@ ostree --repo=testdata/repo init --mode=archive
 echo "Test file in a simple ostree repo - branch test1" > ./testdata/tree/testfile.txt
 ostree --repo=testdata/repo commit --branch=test1 ./testdata/tree/
 
-echo "Test file in a simple ostree repo - branch test2" > ./testdata/tree/testfile.txt
-ostree --repo=testdata/repo commit --branch=test2 ./testdata/tree/
+echo "Test file in a simple ostree repo - branch long/branch/name/test2" > ./testdata/tree/testfile.txt
+ostree --repo=testdata/repo commit --branch=long/branch/name/test2 ./testdata/tree/
 
 echo "Another test file" > ./testdata/tree/another_testfile.txt
-ostree --repo=testdata/repo commit --branch=test2 ./testdata/tree/
+ostree --repo=testdata/repo commit --branch=long/branch/name/test2 ./testdata/tree/
 
 ostree --repo=testdata/repo summary --update
 

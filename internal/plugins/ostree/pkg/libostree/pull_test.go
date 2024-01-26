@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -154,36 +155,35 @@ func TestRepo_Pull(t *testing.T) {
 			})
 
 			t.Run("should list refs from original repo", func(t *testing.T) {
-				expectedChecksums := map[string]bool{}
-				test1Data, err := os.ReadFile("testdata/repo/refs/heads/test1")
-				test2Data, err := os.ReadFile("testdata/repo/refs/heads/test2")
+				repoHeadsPrefix := "testdata/repo/refs/heads"
+				branch1Name := "test1"
+				branch2Name := "long/branch/name/test2"
+				branch1Data, err := os.ReadFile(filepath.Join(repoHeadsPrefix, branch1Name))
+				branch2Data, err := os.ReadFile(filepath.Join(repoHeadsPrefix, branch2Name))
 				if err != nil {
 					t.Errorf("failed to read refs file: %s", err.Error())
 				}
-
-				// Update in case of changes to testdata
-				expectedChecksums[strings.TrimRight(string(test1Data), "\n")] = false
-				expectedChecksums[strings.TrimRight(string(test2Data), "\n")] = false
+				expectedBranches := map[string]string{
+					branch1Name: strings.TrimRight(string(branch1Data), "\n"),
+					branch2Name: strings.TrimRight(string(branch2Data), "\n"),
+				}
 
 				refs, err := repo.ListRefsExt(ListRefsExtFlagsNone)
 				assert.NoError(t, err)
 				if err != nil {
 					assert.Failf(t, "failed to list refs", "err: %s", err.Error())
 				}
-				assert.NotEmpty(t, refs)
+				assert.Len(t, refs, 2)
 
+				// This could be a static list of assert statements but the loop captures unexpected extra refs.
 				for _, ref := range refs {
-					checksum := ref.Checksum
-					assert.NotEmpty(t, checksum)
-					for sum := range expectedChecksums {
-						if sum == checksum {
-							expectedChecksums[sum] = true
-						}
-					}
-				}
+					assert.NotEmpty(t, ref.Name)
+					assert.NotEmpty(t, ref.Checksum)
 
-				for sum, exists := range expectedChecksums {
-					assert.True(t, exists, "checksum %s not found", sum)
+					// Ensure the ref is one of the expected branches
+					expectedChecksum, exists := expectedBranches[ref.Name]
+					assert.True(t, exists, "unexpected ref: %s", ref.Name)
+					assert.Equal(t, expectedChecksum, ref.Checksum)
 				}
 			})
 
