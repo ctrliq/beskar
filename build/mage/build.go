@@ -49,6 +49,7 @@ type genAPI struct {
 type binaryConfig struct {
 	configFiles       map[string]string
 	excludedPlatforms map[dagger.Platform]struct{}
+	useQEMUForCIImage bool
 	execStmts         [][]string
 	useProto          bool
 	genAPI            *genAPI
@@ -172,6 +173,7 @@ var binaries = map[string]binaryConfig{
 			"linux/arm/v6":  {},
 			"linux/arm/v7":  {},
 		},
+		useQEMUForCIImage: true,
 	},
 	BeskarMirrorBinary: {
 		configFiles: map[string]string{
@@ -311,7 +313,8 @@ func (b Build) build(ctx context.Context, name string) error {
 		}
 
 		binary := name
-		if string(platform) != currentPlatform {
+		nativePlatform := string(platform) == currentPlatform
+		if !nativePlatform {
 			binary += "-" + getPlatformBinarySuffix(string(platform))
 		}
 
@@ -319,7 +322,15 @@ func (b Build) build(ctx context.Context, name string) error {
 
 		src := getSource(client)
 
-		golang := client.Container().From(GoImage)
+		var opts []dagger.ContainerOpts
+
+		if binaryConfig.useQEMUForCIImage && buildOpts.publishOptions != nil && !nativePlatform {
+			opts = append(opts, dagger.ContainerOpts{
+				Platform: platform,
+			})
+		}
+
+		golang := client.Container(opts...).From(GoImage)
 
 		golang = golang.
 			WithMountedDirectory("/src", src).
