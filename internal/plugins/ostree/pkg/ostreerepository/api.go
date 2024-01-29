@@ -155,6 +155,9 @@ func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRe
 
 		// Convert the refs to the API type
 		for _, loRef := range loRefs {
+			if loRef.Name == "" || loRef.Checksum == "" {
+				return false, ctl.Errf("invalid ref data encountered")
+			}
 			refs = append(refs, apiv1.OSTreeRef{
 				Name:   loRef.Name,
 				Commit: loRef.Checksum,
