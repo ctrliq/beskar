@@ -286,17 +286,16 @@ func (r *Repo) ListRefsExt(flags ListRefsExtFlags, prefix ...string) ([]Ref, err
 	var iter C.GHashTableIter
 	C.g_hash_table_iter_init(&iter, outAllRefs)
 
-	var cRef, cChecksum C.gpointer
+	var cRef C.gpointer
+	var cChecksum C.gpointer
 	var ret []Ref
 	for C.g_hash_table_iter_next(&iter, &cRef, &cChecksum) == C.gboolean(1) {
 		if cRef == nil {
 			break
 		}
 
-		ref := (*C.OstreeCollectionRef)(unsafe.Pointer(&cRef))
-
 		ret = append(ret, Ref{
-			Name:     C.GoString(ref.ref_name),
+			Name:     C.GoString((*C.char)(cRef)),
 			Checksum: C.GoString((*C.char)(cChecksum)),
 		})
 	}

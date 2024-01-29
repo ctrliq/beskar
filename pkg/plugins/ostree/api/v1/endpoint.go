@@ -194,6 +194,43 @@ func MakeEndpointOfGetRepositorySyncStatus(s OSTree) endpoint.Endpoint {
 	}
 }
 
+type ListRepositoryRefsRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateListRepositoryRefsRequest creates a validator for ListRepositoryRefsRequest.
+func ValidateListRepositoryRefsRequest(newSchema func(*ListRepositoryRefsRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*ListRepositoryRefsRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type ListRepositoryRefsResponse struct {
+	Refs []OSTreeRef `json:"refs"`
+	Err  error       `json:"-"`
+}
+
+func (r *ListRepositoryRefsResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *ListRepositoryRefsResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfListRepositoryRefs creates the endpoint for s.ListRepositoryRefs.
+func MakeEndpointOfListRepositoryRefs(s OSTree) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*ListRepositoryRefsRequest)
+		refs, err := s.ListRepositoryRefs(
+			ctx,
+			req.Repository,
+		)
+		return &ListRepositoryRefsResponse{
+			Refs: refs,
+			Err:  err,
+		}, nil
+	}
+}
+
 type SyncRepositoryRequest struct {
 	Repository string                       `json:"repository"`
 	Properties *OSTreeRepositorySyncRequest `json:"properties"`

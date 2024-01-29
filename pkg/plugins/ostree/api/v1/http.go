@@ -94,6 +94,20 @@ func NewHTTPRouter(svc OSTree, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		),
 	)
 
+	codec = codecs.EncodeDecoder("ListRepositoryRefs")
+	validator = options.RequestValidator("ListRepositoryRefs")
+	r.Method(
+		"GET", "/repository/refs",
+		kithttp.NewServer(
+			MakeEndpointOfListRepositoryRefs(svc),
+			decodeListRepositoryRefsRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	codec = codecs.EncodeDecoder("SyncRepository")
 	validator = options.RequestValidator("SyncRepository")
 	r.Method(
@@ -192,6 +206,22 @@ func decodeDeleteRepositoryRequest(codec httpcodec.Codec, validator httpoption.V
 func decodeGetRepositorySyncStatusRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req GetRepositorySyncStatusRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeListRepositoryRefsRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req ListRepositoryRefsRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err

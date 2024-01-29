@@ -280,6 +280,58 @@ func (c *HTTPClient) GetRepositorySyncStatus(ctx context.Context, repository str
 	return respBody.SyncStatus, nil
 }
 
+func (c *HTTPClient) ListRepositoryRefs(ctx context.Context, repository string) (refs []OSTreeRef, err error) {
+	codec := c.codecs.EncodeDecoder("ListRepositoryRefs")
+
+	path := "/repository/refs"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+	}{
+		Repository: repository,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return nil, err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return nil, err
+	}
+
+	respBody := &ListRepositoryRefsResponse{}
+	err = codec.DecodeSuccessResponse(_resp.Body, respBody.Body())
+	if err != nil {
+		return nil, err
+	}
+	return respBody.Refs, nil
+}
+
 func (c *HTTPClient) SyncRepository(ctx context.Context, repository string, properties *OSTreeRepositorySyncRequest) (err error) {
 	codec := c.codecs.EncodeDecoder("SyncRepository")
 

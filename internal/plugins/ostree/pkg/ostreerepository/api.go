@@ -135,6 +135,41 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 	return nil
 }
 
+func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRef, err error) {
+	// Transition to provisioning state
+	if err := h.setState(StateProvisioning); err != nil {
+		return nil, err
+	}
+	defer h.clearState()
+
+	if !h.checkRepoExists(ctx) {
+		return nil, ctl.Errf("repository does not exist")
+	}
+
+	err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
+		// Get the refs from the local repo
+		loRefs, err := repo.ListRefsExt(libostree.ListRefsExtFlagsNone)
+		if err != nil {
+			return false, ctl.Errf("listing refs from ostree repository: %s", err)
+		}
+
+		// Convert the refs to the API type
+		for _, loRef := range loRefs {
+			if loRef.Name == "" || loRef.Checksum == "" {
+				return false, ctl.Errf("invalid ref data encountered")
+			}
+			refs = append(refs, apiv1.OSTreeRef{
+				Name:   loRef.Name,
+				Commit: loRef.Checksum,
+			})
+		}
+
+		return false, nil
+	})
+
+	return refs, err
+}
+
 func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemoteProperties) (err error) {
 	// Transition to provisioning state
 	if err := h.setState(StateProvisioning); err != nil {
@@ -285,6 +320,15 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 				return false, ctl.Errf("regenerating summary for ostree repository %s: %s", h.repoDir, err)
 			}
 
+			// List the refs in the repository and store in the repoSync
+			loRefs, err := repo.ListRefsExt(libostree.ListRefsExtFlagsNone)
+			if err != nil {
+				return false, ctl.Errf("listing refs from ostree repository: %s", err)
+			}
+			repoSync := *h.repoSync.Load()
+			repoSync.SyncedRefs = loRefs
+			h.setRepoSync(&repoSync)
+
 			return true, nil
 		})
 	}()
@@ -297,10 +341,20 @@ func (h *Handler) GetRepositorySyncStatus(_ context.Context) (syncStatus *apiv1.
 	if repoSync == nil {
 		return nil, ctl.Errf("repository sync status not available")
 	}
+
+	var refs []apiv1.OSTreeRef
+	for _, loRef := range repoSync.SyncedRefs {
+		refs = append(refs, apiv1.OSTreeRef{
+			Name:   loRef.Name,
+			Commit: loRef.Checksum,
+		})
+	}
+
 	return &apiv1.SyncStatus{
-		Syncing:   repoSync.Syncing,
-		StartTime: utils.TimeToString(repoSync.StartTime),
-		EndTime:   utils.TimeToString(repoSync.EndTime),
-		SyncError: repoSync.SyncError,
+		Syncing:    repoSync.Syncing,
+		StartTime:  utils.TimeToString(repoSync.StartTime),
+		EndTime:    utils.TimeToString(repoSync.EndTime),
+		SyncError:  repoSync.SyncError,
+		SyncedRefs: refs,
 	}, nil
 }

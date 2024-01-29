@@ -29,6 +29,14 @@ type OSTreeRepositoryProperties struct {
 	Remotes []OSTreeRemoteProperties `json:"remotes"`
 }
 
+type OSTreeRef struct {
+	// Name - The name of the ref.
+	Name string `json:"name"`
+
+	// Commit - The commit hash of the ref.
+	Commit string `json:"commit"`
+}
+
 type OSTreeRemoteProperties struct {
 	// Name - The name of the remote repository.
 	Name string `json:"name"`
@@ -58,10 +66,11 @@ type OSTreeRepositorySyncRequest struct {
 
 // Mirror sync status.
 type SyncStatus struct {
-	Syncing   bool   `json:"syncing"`
-	StartTime string `json:"start_time"`
-	EndTime   string `json:"end_time"`
-	SyncError string `json:"sync_error"`
+	Syncing    bool        `json:"syncing"`
+	StartTime  string      `json:"start_time"`
+	EndTime    string      `json:"end_time"`
+	SyncError  string      `json:"sync_error"`
+	SyncedRefs []OSTreeRef `json:"synced_refs"`
 
 	// TODO: Implement these
 	// The data for these is present when performing a pull via the ostree cli, so it is in the libostree code base.
@@ -87,6 +96,11 @@ type OSTree interface {
 	//kun:op DELETE /repository
 	//kun:success statusCode=202
 	DeleteRepository(ctx context.Context, repository string) (err error)
+
+	// List OSTree repository refs (A.K.A. Branches).
+	//kun:op GET /repository/refs
+	//kun:success statusCode=200
+	ListRepositoryRefs(ctx context.Context, repository string) (refs []OSTreeRef, err error)
 
 	// Add a new remote to the OSTree repository.
 	//kun:op POST /repository/remote
