@@ -40,7 +40,7 @@ func (p *Plugin) ListRepositoryRefs(ctx context.Context, repository string) (ref
 		return nil, err
 	}
 
-	return p.repositoryManager.Get(ctx, repository).ListRepositoryRefs(ctx, repository)
+	return p.repositoryManager.Get(ctx, repository).ListRepositoryRefs(ctx)
 }
 
 func (p *Plugin) AddRemote(ctx context.Context, repository string, properties *apiv1.OSTreeRemoteProperties) (err error) {
