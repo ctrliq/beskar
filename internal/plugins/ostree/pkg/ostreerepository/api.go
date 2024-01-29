@@ -167,7 +167,7 @@ func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRe
 		return false, nil
 	})
 
-	return
+	return refs, err
 }
 
 func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemoteProperties) (err error) {
