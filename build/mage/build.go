@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"dagger.io/dagger"
@@ -532,7 +533,13 @@ func (b Build) buildProto(ctx context.Context) error {
 	return printOutput(ctx, protoc)
 }
 
+// to prevent concurrent runs of genAPI
+var genAPIMutex sync.Mutex
+
 func (b Build) genAPI(ctx context.Context, name string, genAPI *genAPI) error {
+	genAPIMutex.Lock()
+	defer genAPIMutex.Unlock()
+
 	fmt.Printf("Generating %s API\n", name)
 
 	client, err := getDaggerClient(ctx)
