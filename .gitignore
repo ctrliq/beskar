@@ -5,5 +5,4 @@ vendor
 go.work.sum
 
 
-*/.idea
-/.idea/
+.idea/
