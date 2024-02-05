@@ -23,7 +23,7 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 	h.logger.Debug("creating repository", "repository", h.Repository)
 	// Validate request
 	if len(properties.Remotes) == 0 {
-		return werror.Wrap(gcode.ErrInvalidArgument, err)
+		return werror.Wrap(gcode.ErrInvalidArgument, fmt.Errorf("remotes are required"))
 	}
 
 	// Check if repo already exists
