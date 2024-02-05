@@ -157,7 +157,7 @@ func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRe
 		// Convert the refs to the API type
 		for _, loRef := range loRefs {
 			if loRef.Name == "" || loRef.Checksum == "" {
-				return false, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("invalid ref data encountered"))
+				return false, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("encountered ref with empty name or checksum"))
 			}
 			refs = append(refs, apiv1.OSTreeRef{
 				Name:   loRef.Name,
