@@ -10,7 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.ciq.dev/beskar/cmd/beskarctl/ctl"
+	"github.com/RussellLuo/kun/pkg/werror"
+	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"go.ciq.dev/beskar/internal/plugins/ostree/pkg/libostree"
 	"go.ciq.dev/beskar/pkg/orasostree"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/ostree/api/v1"
@@ -22,12 +23,12 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 	h.logger.Debug("creating repository", "repository", h.Repository)
 	// Validate request
 	if len(properties.Remotes) == 0 {
-		return ctl.Errf("at least one remote is required")
+		return werror.Wrap(gcode.ErrInvalidArgument, err)
 	}
 
 	// Check if repo already exists
 	if h.checkRepoExists(ctx) {
-		return ctl.Err("repository already exists")
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository already exists"))
 	}
 
 	// Transition to provisioning state
@@ -45,12 +46,12 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.OSTree
 				opts = append(opts, libostree.NoGPGVerify())
 			}
 			if err := repo.AddRemote(remote.Name, remote.RemoteURL, opts...); err != nil {
-				return false, ctl.Errf("adding remote to ostree repository %s: %s", remote.Name, err)
+				return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("adding remote to ostree repository %s: %w", remote.Name, err))
 			}
 		}
 
 		if err := repo.RegenerateSummary(); err != nil {
-			return false, ctl.Errf("regenerating summary for ostree repository %s: %s", h.repoDir, err)
+			return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("regenerating summary for ostree repository %s: %w", h.repoDir, err))
 		}
 
 		return true, nil
@@ -69,7 +70,7 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 	// Check if repo already exists
 	if !h.checkRepoExists(ctx) {
 		defer h.clearState()
-		return ctl.Err("repository does not exist")
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository does not exist"))
 	}
 
 	go func() {
@@ -143,20 +144,20 @@ func (h *Handler) ListRepositoryRefs(ctx context.Context) (refs []apiv1.OSTreeRe
 	defer h.clearState()
 
 	if !h.checkRepoExists(ctx) {
-		return nil, ctl.Errf("repository does not exist")
+		return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository does not exist"))
 	}
 
 	err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
 		// Get the refs from the local repo
 		loRefs, err := repo.ListRefsExt(libostree.ListRefsExtFlagsNone)
 		if err != nil {
-			return false, ctl.Errf("listing refs from ostree repository: %s", err)
+			return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("listing refs from ostree repository: %w", err))
 		}
 
 		// Convert the refs to the API type
 		for _, loRef := range loRefs {
 			if loRef.Name == "" || loRef.Checksum == "" {
-				return false, ctl.Errf("invalid ref data encountered")
+				return false, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("invalid ref data encountered"))
 			}
 			refs = append(refs, apiv1.OSTreeRef{
 				Name:   loRef.Name,
@@ -178,7 +179,7 @@ func (h *Handler) AddRemote(ctx context.Context, remote *apiv1.OSTreeRemotePrope
 	defer h.clearState()
 
 	if !h.checkRepoExists(ctx) {
-		return ctl.Errf("repository does not exist")
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository does not exist"))
 	}
 
 	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
@@ -204,7 +205,7 @@ func (h *Handler) UpdateRemote(ctx context.Context, remoteName string, remote *a
 	defer h.clearState()
 
 	if !h.checkRepoExists(ctx) {
-		return ctl.Errf("repository does not exist")
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository does not exist"))
 	}
 
 	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
@@ -236,7 +237,7 @@ func (h *Handler) DeleteRemote(ctx context.Context, remoteName string) (err erro
 	defer h.clearState()
 
 	if !h.checkRepoExists(ctx) {
-		return ctl.Errf("repository does not exist")
+		return werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository does not exist"))
 	}
 
 	return h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (bool, error) {
@@ -313,17 +314,17 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 
 			// pull remote content into local repo
 			if err := repo.Pull(ctx, remoteName, opts...); err != nil {
-				return false, ctl.Errf("pulling ostree repository: %s", err)
+				return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("pulling ostree repository: %w", err))
 			}
 
 			if err := repo.RegenerateSummary(); err != nil {
-				return false, ctl.Errf("regenerating summary for ostree repository %s: %s", h.repoDir, err)
+				return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("regenerating summary for ostree repository %s: %w", h.repoDir, err))
 			}
 
 			// List the refs in the repository and store in the repoSync
 			loRefs, err := repo.ListRefsExt(libostree.ListRefsExtFlagsNone)
 			if err != nil {
-				return false, ctl.Errf("listing refs from ostree repository: %s", err)
+				return false, werror.Wrap(gcode.ErrInternal, fmt.Errorf("listing refs from ostree repository: %w", err))
 			}
 			repoSync := *h.repoSync.Load()
 			repoSync.SyncedRefs = loRefs
@@ -339,7 +340,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 func (h *Handler) GetRepositorySyncStatus(_ context.Context) (syncStatus *apiv1.SyncStatus, err error) {
 	repoSync := h.repoSync.Load()
 	if repoSync == nil {
-		return nil, ctl.Errf("repository sync status not available")
+		return nil, werror.Wrap(gcode.ErrNotFound, fmt.Errorf("repository sync status not available"))
 	}
 
 	var refs []apiv1.OSTreeRef
