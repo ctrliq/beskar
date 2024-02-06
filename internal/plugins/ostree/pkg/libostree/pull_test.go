@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 		log.Fatalln("testdata/repo does not exist: please run ./generate-testdata.sh")
 	}
 
-	if err := os.MkdirAll("/tmp/libostree-pull_test", 0755); err != nil {
+	if err := os.MkdirAll("/tmp/libostree-pull_test", 0o755); err != nil {
 		log.Fatalf("failed to create test directory: %s", err.Error())
 	}
 

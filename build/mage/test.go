@@ -2,10 +2,12 @@ package mage
 
 import (
 	"context"
-	"dagger.io/dagger"
 	"fmt"
-	"github.com/magefile/mage/mg"
 	"strings"
+
+	"dagger.io/dagger"
+
+	"github.com/magefile/mage/mg"
 )
 
 type Test mg.Namespace

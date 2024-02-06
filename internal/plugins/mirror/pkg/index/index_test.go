@@ -48,7 +48,6 @@ func TestGenerate(t *testing.T) {
 
 	// Call the function under test
 	result, err := Generate(c)
-
 	// Check the result
 	if err != nil {
 		t.Errorf("Generate() returned an error: %v", err)
