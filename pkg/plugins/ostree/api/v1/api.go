@@ -6,6 +6,7 @@ package apiv1
 import (
 	"context"
 	"regexp"
+	"time"
 )
 
 const (
@@ -62,6 +63,9 @@ type OSTreeRepositorySyncRequest struct {
 
 	// Depth - The depth of the mirror. Defaults is 0, -1 means infinite.
 	Depth int `json:"depth"`
+
+	// Timeout - The timeout for the sync in seconds. Default is 20 minutes.
+	Timeout time.Duration `json:"timeout"`
 }
 
 // Mirror sync status.

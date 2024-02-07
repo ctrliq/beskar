@@ -29,13 +29,14 @@ const (
 var defaultBeskarOSTreeConfig string
 
 type BeskarOSTreeConfig struct {
-	Version         string        `yaml:"version"`
-	Log             log.Config    `yaml:"log"`
-	Addr            string        `yaml:"addr"`
-	Gossip          gossip.Config `yaml:"gossip"`
-	Profiling       bool          `yaml:"profiling"`
-	DataDir         string        `yaml:"datadir"`
-	ConfigDirectory string        `yaml:"-"`
+	Version         string            `yaml:"version"`
+	Log             log.Config        `yaml:"log"`
+	Addr            string            `yaml:"addr"`
+	Gossip          gossip.Config     `yaml:"gossip"`
+	Profiling       bool              `yaml:"profiling"`
+	DataDir         string            `yaml:"datadir"`
+	ConfigDirectory string            `yaml:"-"`
+	Sync            config.SyncConfig `yaml:"sync"`
 }
 
 type BeskarOSTreeConfigV1 BeskarOSTreeConfig

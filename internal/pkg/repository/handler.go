@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.ciq.dev/beskar/internal/pkg/config"
 	"go.ciq.dev/beskar/internal/pkg/gossip"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -30,6 +31,7 @@ type HandlerParams struct {
 	NameOptions   []name.Option
 	remove        func(string)
 	BeskarMeta    *gossip.BeskarMeta
+	Sync          config.SyncConfig
 }
 
 func (hp HandlerParams) Remove(repository string) {

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
@@ -274,7 +273,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 			h.clearState()
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), properties.Timeout)
 		defer cancel()
 
 		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (commit bool, transactionFnErr error) {
