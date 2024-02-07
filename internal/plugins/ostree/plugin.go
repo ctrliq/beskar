@@ -40,8 +40,9 @@ var routerRego []byte
 var routerData []byte
 
 type Plugin struct {
-	ctx    context.Context
-	config pluginsrv.Config
+	ctx                context.Context
+	config             pluginsrv.Config
+	beskarOSTreeConfig *config.BeskarOSTreeConfig
 
 	repositoryManager *repository.Manager[*ostreerepository.Handler]
 	handlerParams     *repository.HandlerParams
@@ -88,7 +89,8 @@ func New(ctx context.Context, beskarOSTreeConfig *config.BeskarOSTreeConfig) (*P
 				},
 			},
 		},
-		handlerParams: params,
+		beskarOSTreeConfig: beskarOSTreeConfig,
+		handlerParams:      params,
 		repositoryManager: repository.NewManager[*ostreerepository.Handler](
 			params,
 			ostreerepository.NewHandler,

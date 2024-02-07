@@ -14,3 +14,7 @@ gossip:
   key: XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=
   peers:
     - 127.0.0.1:5102
+
+sync:
+  timeout: 3600 # 1 hour
+  max_worker_count: 10

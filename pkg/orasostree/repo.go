@@ -118,7 +118,7 @@ func (p *OSTreeRepositoryPusher) push(path string) error {
 	if p.logger != nil {
 		path = strings.TrimPrefix(path, p.dir)
 		path = strings.TrimPrefix(path, "/")
-		p.logger.Debug("pushing file to beskar", "file", path, "reference", pusher.Reference())
+		p.logger.Debug("pushing file to beskar", "file", path, "reference", pusher.Reference().String())
 	}
 
 	return oras.Push(pusher, p.remoteOpts...)

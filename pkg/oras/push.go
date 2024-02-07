@@ -37,7 +37,7 @@ func Push(pusher Pusher, options ...remote.Option) error {
 		return fmt.Errorf("while getting image index to push: %w", err)
 	} else if err == nil {
 		if err := remote.WriteIndex(ref, imageIndex, options...); err != nil {
-			return fmt.Errorf("while pushing image to %s: %w", ref.Name(), err)
+			return fmt.Errorf("image index list: while pushing image to %s: %w", ref.Name(), err)
 		}
 		return nil
 	}
@@ -47,7 +47,7 @@ func Push(pusher Pusher, options ...remote.Option) error {
 		return fmt.Errorf("while getting image to push: %w", err)
 	} else if err == nil {
 		if err := remote.Write(ref, image, options...); err != nil {
-			return fmt.Errorf("while pushing image to %s: %w", ref.Name(), err)
+			return fmt.Errorf("image index: while pushing image to %s: %w", ref.Name(), err)
 		}
 		return nil
 	}

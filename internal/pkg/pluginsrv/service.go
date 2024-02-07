@@ -302,8 +302,12 @@ func getBeskarTransport(caPEM *mtls.CAPEM, beskarMeta *gossip.BeskarMeta) (http.
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		// disable insecure connection to beskar
-		return nil, syscall.ECONNREFUSED
+		if addr == beskarAddr {
+			// disable insecure connection to beskar
+			return nil, syscall.ECONNREFUSED
+		}
+
+		return net.Dial(network, addr)
 	}
 
 	transport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
