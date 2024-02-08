@@ -130,7 +130,7 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 			ctx,
 			h.repoDir,
 			h.Repository,
-			h.Params.Sync.MaxWorkerCount,
+			h.Params.Sync.GetMaxWorkerCount(),
 		)
 		repoPusher = repoPusher.WithLogger(h.logger)
 		repoPusher = repoPusher.WithNameOptions(h.Params.NameOptions...)
