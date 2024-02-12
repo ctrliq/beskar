@@ -72,8 +72,8 @@ func (p *Plugin) SyncRepository(ctx context.Context, repository string, properti
 		return err
 	}
 
-	if properties.Timeout <= 0 {
-		properties.Timeout = p.beskarOSTreeConfig.Sync.GetTimeout()
+	if properties.Timeout == nil || !properties.Timeout.IsValid() || properties.Timeout.GetSeconds() <= 0 {
+		properties.Timeout = p.beskarOSTreeConfig.Sync.Timeout
 	}
 
 	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, properties)

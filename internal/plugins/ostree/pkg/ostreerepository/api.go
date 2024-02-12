@@ -273,7 +273,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 			h.clearState()
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), properties.Timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), properties.Timeout.AsDuration())
 		defer cancel()
 
 		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (commit bool, transactionFnErr error) {

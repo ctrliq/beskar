@@ -66,7 +66,7 @@ type OSTreeRepositorySyncRequest struct {
 	Depth int `json:"depth"`
 
 	// Timeout - The timeout for the sync in seconds. Default is 1 hour.
-	Timeout durationpb.Duration `json:"timeout"`
+	Timeout *durationpb.Duration `json:"timeout"`
 }
 
 // Mirror sync status.
