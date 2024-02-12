@@ -15,7 +15,7 @@ const (
 )
 
 type SyncConfig struct {
-	Timeout        durationpb.Duration `yaml:"timeout"`
+	Timeout        *durationpb.Duration `yaml:"timeout"`
 	MaxWorkerCount int                 `yaml:"max_worker_count"`
 }
 
