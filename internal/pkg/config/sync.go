@@ -16,10 +16,14 @@ const (
 
 type SyncConfig struct {
 	Timeout        *durationpb.Duration `yaml:"timeout"`
-	MaxWorkerCount int                 `yaml:"max_worker_count"`
+	MaxWorkerCount int                  `yaml:"max_worker_count"`
 }
 
 func (sc *SyncConfig) GetTimeout() time.Duration {
+	if sc.Timeout == nil {
+		return DefaultSyncTimeout
+	}
+
 	if !sc.Timeout.IsValid() || sc.Timeout.GetSeconds() <= 0 {
 		return DefaultSyncTimeout
 	}
