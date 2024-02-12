@@ -16,5 +16,5 @@ gossip:
     - 127.0.0.1:5102
 
 sync:
-  timeout: 3600 # 1 hour
+  timeout: 3600s # 1 hour
   max_worker_count: 10
