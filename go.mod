@@ -8,9 +8,9 @@ require (
 	github.com/RussellLuo/kun v0.4.5
 	github.com/RussellLuo/validating/v3 v3.0.0-beta.1
 	github.com/adlio/schema v1.3.4
-	github.com/antoniomika/go-rsync v0.0.0-20220817021523-f831db35f9a3
 	github.com/aws/aws-sdk-go v1.48.10
 	github.com/cavaliergopher/rpm v1.2.0
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/distribution/distribution/v3 v3.0.0-alpha.1
 	github.com/distribution/reference v0.5.0
@@ -34,6 +34,7 @@ require (
 	github.com/twmb/murmur3 v1.1.8
 	github.com/ulikunitz/xz v0.5.11
 	github.com/vishvananda/netlink v1.2.1-beta.2
+	go.ciq.dev/go-rsync v0.0.0-20240304021629-0a3bb196e6d1
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	gocloud.dev v0.32.0

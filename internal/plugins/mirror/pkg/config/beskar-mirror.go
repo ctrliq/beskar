@@ -31,14 +31,15 @@ const (
 var defaultBeskarMirrorConfig string
 
 type BeskarMirrorConfig struct {
-	Version         string         `yaml:"version"`
-	Log             log.Config     `yaml:"log"`
-	Addr            string         `yaml:"addr"`
-	Gossip          gossip.Config  `yaml:"gossip"`
-	Storage         storage.Config `yaml:"storage"`
-	Profiling       bool           `yaml:"profiling"`
-	DataDir         string         `yaml:"datadir"`
-	ConfigDirectory string         `yaml:"-"`
+	Version         string            `yaml:"version"`
+	Log             log.Config        `yaml:"log"`
+	Addr            string            `yaml:"addr"`
+	Gossip          gossip.Config     `yaml:"gossip"`
+	Storage         storage.Config    `yaml:"storage"`
+	Profiling       bool              `yaml:"profiling"`
+	DataDir         string            `yaml:"datadir"`
+	ConfigDirectory string            `yaml:"-"`
+	Sync            config.SyncConfig `yaml:"sync"`
 }
 
 func (bc BeskarMirrorConfig) ListenIP() (string, error) {

@@ -17,7 +17,19 @@ import (
 	"go.ciq.dev/beskar/internal/pkg/repository"
 	"go.ciq.dev/beskar/internal/plugins/mirror/pkg/mirrordb"
 	eventv1 "go.ciq.dev/beskar/pkg/api/event/v1"
+	apiv1 "go.ciq.dev/beskar/pkg/plugins/mirror/api/v1"
 )
+
+type mirrorConfig struct {
+	URL         *url.URL
+	HTTPURL     *url.URL
+	Destination string
+	Exclusions  []string
+}
+
+type webConfig struct {
+	Prefix string
+}
 
 type Handler struct {
 	*repository.RepoHandler
@@ -38,7 +50,8 @@ type Handler struct {
 	propertyMutex sync.RWMutex
 	created       bool
 	mirror        bool
-	mirrorURLs    []*url.URL
+	mirrorConfigs []mirrorConfig
+	webConfig     *webConfig
 
 	delete atomic.Bool
 }
@@ -52,7 +65,27 @@ func NewHandler(logger *slog.Logger, repoHandler *repository.RepoHandler) *Handl
 	}
 }
 
-func (h *Handler) QueueEvent(event *eventv1.EventPayload, _ bool) error {
+func (h *Handler) downloadDir() string {
+	return filepath.Join(h.repoDir, "downloads")
+}
+
+func (h *Handler) QueueEvent(event *eventv1.EventPayload, store bool) error {
+	ctx := context.Background()
+
+	if store {
+		db, err := h.getStatusDB(ctx)
+		if err != nil {
+			h.logger.Error("status database event", "digest", event.Digest, "mediatype", event.Mediatype, "error", err.Error())
+			return err
+		} else if err := db.AddEvent(ctx, event); err != nil {
+			h.logger.Error("add event in status database", "digest", event.Digest, "mediatype", event.Mediatype, "error", err.Error())
+			return err
+		} else if err := db.Sync(ctx); err != nil {
+			h.logger.Error("sync status database", "digest", event.Digest, "mediatype", event.Mediatype, "error", err.Error())
+			return err
+		}
+	}
+
 	h.logger.Info("queued event", "digest", event.Digest)
 
 	h.EnqueueEvent(event)
@@ -167,15 +200,28 @@ func (h *Handler) initProperties(ctx context.Context) error {
 	h.setMirror(properties.Mirror)
 	h.setCreated(properties.Created)
 
-	if len(properties.MirrorURLs) > 0 {
-		var mirrorURLs []string
+	if len(properties.MirrorConfigs) > 0 {
+		var mirrorConfigs []apiv1.MirrorConfig
 
-		decoder := gob.NewDecoder(bytes.NewReader(properties.MirrorURLs))
-		if err := decoder.Decode(&mirrorURLs); err != nil {
+		decoder := gob.NewDecoder(bytes.NewReader(properties.MirrorConfigs))
+		if err := decoder.Decode(&mirrorConfigs); err != nil {
 			return err
 		}
 
-		if err := h.setMirrorURLs(mirrorURLs); err != nil {
+		if err := h.setMirrorConfigs(mirrorConfigs); err != nil {
+			return err
+		}
+	}
+
+	if len(properties.WebConfig) > 0 {
+		var webConfig apiv1.WebConfig
+
+		decoder := gob.NewDecoder(bytes.NewReader(properties.WebConfig))
+		if err := decoder.Decode(&webConfig); err != nil {
+			return err
+		}
+
+		if err := h.setWebConfig(&webConfig); err != nil {
 			return err
 		}
 	}
@@ -189,30 +235,62 @@ func (h *Handler) initProperties(ctx context.Context) error {
 	return nil
 }
 
-func (h *Handler) setMirrorURLs(urls []string) error {
-	var err error
+func (h *Handler) setMirrorConfigs(configs []apiv1.MirrorConfig) error {
+	mirrorConfigs := make([]mirrorConfig, len(configs))
 
-	mirrorURLs := make([]*url.URL, len(urls))
-
-	for i, u := range urls {
-		mirrorURLs[i], err = url.Parse(u)
+	for i, c := range configs {
+		u, err := url.Parse(c.URL)
 		if err != nil {
 			return err
+		}
+
+		var hu *url.URL
+		if c.HTTPURL != "" {
+			hu, err = url.Parse(c.HTTPURL)
+			if err != nil {
+				return err
+			}
+		}
+
+		mirrorConfigs[i] = mirrorConfig{
+			URL:         u,
+			HTTPURL:     hu,
+			Destination: c.Destination,
+			Exclusions:  c.Exclusions,
 		}
 	}
 
 	h.propertyMutex.Lock()
-	h.mirrorURLs = mirrorURLs
+	h.mirrorConfigs = mirrorConfigs
 	h.propertyMutex.Unlock()
 
 	return nil
 }
 
-func (h *Handler) getMirrorURLs() []*url.URL {
+func (h *Handler) getMirrorConfigs() []mirrorConfig {
 	h.propertyMutex.RLock()
 	defer h.propertyMutex.RUnlock()
 
-	return h.mirrorURLs
+	return h.mirrorConfigs
+}
+
+func (h *Handler) setWebConfig(config *apiv1.WebConfig) error {
+	webConfig := webConfig{
+		Prefix: config.Prefix,
+	}
+
+	h.propertyMutex.Lock()
+	h.webConfig = &webConfig
+	h.propertyMutex.Unlock()
+
+	return nil
+}
+
+func (h *Handler) getWebConfig() *webConfig {
+	h.propertyMutex.RLock()
+	defer h.propertyMutex.RUnlock()
+
+	return h.webConfig
 }
 
 func (h *Handler) setMirror(b bool) {
@@ -283,7 +361,7 @@ func (h *Handler) Start(ctx context.Context) {
 	sync := h.getSync()
 
 	h.propertyMutex.RLock()
-	mirrorCount := len(h.mirrorURLs)
+	mirrorCount := len(h.mirrorConfigs)
 	h.propertyMutex.RUnlock()
 
 	if sync.Syncing && mirrorCount == 0 {

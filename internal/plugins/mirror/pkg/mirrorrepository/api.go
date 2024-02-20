@@ -50,14 +50,26 @@ func (h *Handler) CreateRepository(ctx context.Context, properties *apiv1.Reposi
 	}
 	h.setMirror(propertiesDB.Mirror)
 
-	if properties.MirrorURLs != nil {
+	if properties.MirrorConfigs != nil {
 		buf := new(bytes.Buffer)
 		decoder := gob.NewEncoder(buf)
-		if err := decoder.Encode(properties.MirrorURLs); err != nil {
+		if err := decoder.Encode(properties.MirrorConfigs); err != nil {
 			return werror.Wrap(gcode.ErrInternal, err)
 		}
-		propertiesDB.MirrorURLs = buf.Bytes()
-		if err := h.setMirrorURLs(properties.MirrorURLs); err != nil {
+		propertiesDB.MirrorConfigs = buf.Bytes()
+		if err := h.setMirrorConfigs(properties.MirrorConfigs); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	if properties.WebConfig != nil {
+		buf := new(bytes.Buffer)
+		decoder := gob.NewEncoder(buf)
+		if err := decoder.Encode(properties.WebConfig); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+		propertiesDB.WebConfig = buf.Bytes()
+		if err := h.setWebConfig(properties.WebConfig); err != nil {
 			return werror.Wrap(gcode.ErrInternal, err)
 		}
 	}
@@ -167,14 +179,26 @@ func (h *Handler) UpdateRepository(ctx context.Context, properties *apiv1.Reposi
 	}
 	h.setMirror(propertiesDB.Mirror)
 
-	if properties.MirrorURLs != nil {
+	if properties.MirrorConfigs != nil {
 		buf := new(bytes.Buffer)
 		decoder := gob.NewEncoder(buf)
-		if err := decoder.Encode(properties.MirrorURLs); err != nil {
+		if err := decoder.Encode(properties.MirrorConfigs); err != nil {
 			return werror.Wrap(gcode.ErrInternal, err)
 		}
-		propertiesDB.MirrorURLs = buf.Bytes()
-		if err := h.setMirrorURLs(properties.MirrorURLs); err != nil {
+		propertiesDB.MirrorConfigs = buf.Bytes()
+		if err := h.setMirrorConfigs(properties.MirrorConfigs); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	if properties.WebConfig != nil {
+		buf := new(bytes.Buffer)
+		decoder := gob.NewEncoder(buf)
+		if err := decoder.Encode(properties.WebConfig); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+		propertiesDB.WebConfig = buf.Bytes()
+		if err := h.setWebConfig(properties.WebConfig); err != nil {
 			return werror.Wrap(gcode.ErrInternal, err)
 		}
 	}
@@ -208,9 +232,16 @@ func (h *Handler) GetRepository(ctx context.Context) (properties *apiv1.Reposito
 		Mirror: &propertiesDB.Mirror,
 	}
 
-	if len(propertiesDB.MirrorURLs) > 0 {
-		decoder := gob.NewDecoder(bytes.NewReader(propertiesDB.MirrorURLs))
-		if err := decoder.Decode(&properties.MirrorURLs); err != nil {
+	if len(propertiesDB.MirrorConfigs) > 0 {
+		decoder := gob.NewDecoder(bytes.NewReader(propertiesDB.MirrorConfigs))
+		if err := decoder.Decode(&properties.MirrorConfigs); err != nil {
+			return nil, werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	if len(propertiesDB.WebConfig) > 0 {
+		decoder := gob.NewDecoder(bytes.NewReader(propertiesDB.WebConfig))
+		if err := decoder.Decode(&properties.WebConfig); err != nil {
 			return nil, werror.Wrap(gcode.ErrInternal, err)
 		}
 	}
@@ -223,8 +254,8 @@ func (h *Handler) SyncRepository(_ context.Context, wait bool) (err error) {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if !h.getMirror() {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
-	} else if len(h.getMirrorURLs()) == 0 {
-		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror URLs setup"))
+	} else if len(h.getMirrorConfigs()) == 0 {
+		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror configurations setup"))
 	} else if h.delete.Load() {
 		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
 	} else if h.syncing.Swap(true) {
@@ -251,48 +282,55 @@ func (h *Handler) SyncRepository(_ context.Context, wait bool) (err error) {
 	return nil
 }
 
-func (h *Handler) SyncRepositoryWithURL(_ context.Context, url string, wait bool) (err error) {
+func (h *Handler) GenerateRepository(_ context.Context) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
 	} else if !h.getMirror() {
 		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
-	} else if err := h.setMirrorURLs([]string{url}); err != nil {
-		return werror.Wrap(gcode.ErrInternal, err)
+	} else if len(h.getMirrorConfigs()) == 0 {
+		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror configurations setup"))
 	} else if h.delete.Load() {
 		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
-	} else if h.syncing.Swap(true) {
-		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
+	} else if h.syncing.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is running"))
 	}
 
-	var waitErrCh chan error
-
-	if wait {
-		waitErrCh = make(chan error, 1)
-	}
-
-	select {
-	case h.syncCh <- waitErrCh:
-		if waitErrCh != nil {
-			if err := <-waitErrCh; err != nil {
-				return werror.Wrap(gcode.ErrInternal, fmt.Errorf("synchronization failed: %w", err))
-			}
-		}
-	default:
-		return werror.Wrap(gcode.ErrUnavailable, errors.New("something goes wrong"))
+	if err := h.GenerateIndexes(); err != nil {
+		h.logger.Error("failed to generate indexes", "error", err)
+		return werror.Wrap(gcode.ErrUnavailable, errors.New("unable to generate indexes"))
 	}
 
 	return nil
+}
+
+func (h *Handler) GetRepositorySyncPlan(_ context.Context) (syncPlan *apiv1.RepositorySyncPlan, err error) {
+	if !h.Started() {
+		return nil, werror.Wrap(gcode.ErrUnavailable, err)
+	} else if !h.getMirror() {
+		return nil, werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
+	} else if len(h.getMirrorConfigs()) == 0 {
+		return nil, werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository doesn't have mirror configurations setup"))
+	} else if h.delete.Load() {
+		return nil, werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	} else if h.syncing.Load() {
+		return nil, werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is running"))
+	}
+
+	plan, err := h.getSyncPlan()
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrUnavailable, errors.New("unable to generate sync plan"))
+	}
+
+	return plan, nil
 }
 
 func (h *Handler) GetRepositorySyncStatus(context.Context) (syncStatus *apiv1.SyncStatus, err error) {
 	sync := h.getSync()
 	return &apiv1.SyncStatus{
-		Syncing:     sync.Syncing,
-		StartTime:   utils.TimeToString(sync.StartTime),
-		EndTime:     utils.TimeToString(sync.EndTime),
-		TotalFiles:  sync.TotalFiles,
-		SyncedFiles: sync.SyncedFiles,
-		SyncError:   sync.SyncError,
+		Syncing:   sync.Syncing,
+		StartTime: utils.TimeToString(sync.StartTime),
+		EndTime:   utils.TimeToString(sync.EndTime),
+		SyncError: sync.SyncError,
 	}, nil
 }
 
@@ -366,7 +404,7 @@ func (h *Handler) ListRepositorySymlinks(ctx context.Context, _ *apiv1.Page) (re
 	return repositoryFiles, nil
 }
 
-func (h *Handler) GetRepositoryFile(ctx context.Context, file string) (repositoryFile *apiv1.RepositoryFile, err error) {
+func (h *Handler) GetRepositoryFile(ctx context.Context, name string) (repositoryFile *apiv1.RepositoryFile, err error) {
 	if !h.Started() {
 		return nil, werror.Wrap(gcode.ErrUnavailable, err)
 	}
@@ -377,12 +415,88 @@ func (h *Handler) GetRepositoryFile(ctx context.Context, file string) (repositor
 	}
 	defer db.Close(false)
 
-	fileDB, err := db.GetFileByName(ctx, file)
+	fileDB, err := db.GetFileByName(ctx, name)
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 
 	return toRepositoryFileAPI(fileDB), nil
+}
+
+func (h *Handler) GetRepositoryFileByReferenceRaw(ctx context.Context, reference string) (repositoryFile *mirrordb.RepositoryFile, err error) {
+	if !h.Started() {
+		return nil, werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	fileDB, err := db.GetFileByReference(ctx, reference)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return fileDB, nil
+}
+
+func (h *Handler) GetRepositoryFileByReference(ctx context.Context, reference string) (repositoryFile *apiv1.RepositoryFile, err error) {
+	if !h.Started() {
+		return nil, werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	fileDB, err := db.GetFileByReference(ctx, reference)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return toRepositoryFileAPI(fileDB), nil
+}
+
+func (h *Handler) GetRepositoryFileCount(ctx context.Context) (count int, err error) {
+	if !h.Started() {
+		return 0, werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return 0, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	count, err = db.CountFiles(ctx)
+	if err != nil {
+		return 0, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return count, nil
+}
+
+func (h *Handler) DeleteRepositoryFile(ctx context.Context, file string) (err error) {
+	if !h.Started() {
+		return werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	err = db.DeleteFileByName(ctx, file)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return nil
 }
 
 func (h *Handler) removeRepositoryFile(ctx context.Context, file *mirrordb.RepositoryFile) error {
@@ -412,9 +526,12 @@ func toRepositoryFileAPI(file *mirrordb.RepositoryFile) *apiv1.RepositoryFile {
 	return &apiv1.RepositoryFile{
 		Tag:          file.Tag,
 		Name:         file.Name,
+		Reference:    file.Reference,
+		Parent:       file.Parent,
 		Link:         file.Link,
 		ModifiedTime: utils.TimeToString(file.ModifiedTime),
 		Mode:         file.Mode,
 		Size:         file.Size,
+		ConfigID:     file.ConfigID,
 	}
 }

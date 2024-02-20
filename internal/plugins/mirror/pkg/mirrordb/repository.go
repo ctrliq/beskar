@@ -20,10 +20,13 @@ var repositorySchemas embed.FS
 type RepositoryFile struct {
 	Tag          string `db:"tag"`
 	Name         string `db:"name"`
+	Reference    string `db:"reference"`
+	Parent       string `db:"parent"`
 	Link         string `db:"link"`
 	ModifiedTime int64  `db:"modified_time"`
 	Mode         uint32 `db:"mode"`
 	Size         uint64 `db:"size"`
+	ConfigID     uint64 `db:"config_id"`
 }
 
 type RepositoryDB struct {
@@ -56,15 +59,15 @@ func (db *RepositoryDB) AddFile(ctx context.Context, file *RepositoryFile) error
 	}
 
 	//nolint:gosec
-	s := md5.Sum([]byte(file.Name))
+	s := md5.Sum([]byte(file.Reference))
 	file.Tag = hex.EncodeToString(s[:])
 
 	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
 		// BE CAREFUL and respect the table's columns order !!
-		"INSERT INTO files VALUES(:tag, :name, :link, :modified_time, :mode, :size) "+
-			"ON CONFLICT (tag) DO UPDATE SET name = :name, link = :link, modified_time = :modified_time, mode = :mode, size = :size",
+		"INSERT INTO files VALUES(:tag, :name, :reference, :parent, :link, :modified_time, :mode, :size, :config_id) "+
+			"ON CONFLICT (tag) DO UPDATE SET name = :name, reference = :reference, parent = :parent, link = :link, modified_time = :modified_time, mode = :mode, size = :size, config_id = :config_id",
 		file,
 	)
 	db.Unlock()
@@ -159,6 +162,56 @@ func (db *RepositoryDB) GetFileByName(ctx context.Context, name string) (*Reposi
 	return file, nil
 }
 
+func (db *RepositoryDB) GetFileByReference(ctx context.Context, reference string) (*RepositoryFile, error) {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT * FROM files WHERE reference = ? LIMIT 1", reference)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	file := new(RepositoryFile)
+
+	if !rows.Next() {
+		return nil, sqlite.ErrNoEntryFound
+	}
+	if err := rows.StructScan(file); err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func (db *RepositoryDB) DeleteFileByName(ctx context.Context, name string) error {
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	db.Lock()
+	result, err := db.ExecContext(ctx, "DELETE FROM files WHERE name = ?", name)
+	db.Unlock()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type WalkFileFunc func(*RepositoryFile) error
 
 func (db *RepositoryDB) WalkFiles(ctx context.Context, walkFn WalkFileFunc) error {
@@ -216,6 +269,101 @@ func (db *RepositoryDB) WalkSymlinks(ctx context.Context, walkFn WalkFileFunc) e
 		if err != nil {
 			return err
 		} else if err := walkFn(file); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *RepositoryDB) WalkFilesByParent(ctx context.Context, parent string, walkFn WalkFileFunc) error {
+	if walkFn == nil {
+		return fmt.Errorf("no file walk function provided")
+	}
+
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT * FROM files WHERE parent = ?", parent)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		file := new(RepositoryFile)
+		err := rows.StructScan(file)
+		if err != nil {
+			return err
+		} else if err := walkFn(file); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *RepositoryDB) WalkFilesByConfigID(ctx context.Context, configID uint64, walkFn WalkFileFunc) error {
+	if walkFn == nil {
+		return fmt.Errorf("no file walk function provided")
+	}
+
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT * FROM files WHERE config_id = ?", configID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		file := new(RepositoryFile)
+		err := rows.StructScan(file)
+		if err != nil {
+			return err
+		} else if err := walkFn(file); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type WalkStringFunc func(*string) error
+
+func (db *RepositoryDB) WalkFilesByDistinctParent(ctx context.Context, walkFn WalkStringFunc) error {
+	if walkFn == nil {
+		return fmt.Errorf("no file walk function provided")
+	}
+
+	db.Reference.Add(1)
+	defer db.Reference.Add(-1)
+
+	if err := db.Open(ctx); err != nil {
+		return err
+	}
+
+	rows, err := db.QueryxContext(ctx, "SELECT DISTINCT parent FROM files")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		parent := new(string)
+		err := rows.Scan(parent)
+		if err != nil {
+			return err
+		} else if err := walkFn(parent); err != nil {
 			return err
 		}
 	}

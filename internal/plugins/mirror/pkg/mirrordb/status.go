@@ -24,9 +24,10 @@ type Event struct {
 }
 
 type Properties struct {
-	Created    bool   `db:"created"`
-	Mirror     bool   `db:"mirror"`
-	MirrorURLs []byte `db:"mirror_urls"`
+	Created       bool   `db:"created"`
+	Mirror        bool   `db:"mirror"`
+	MirrorConfigs []byte `db:"mirror_configs"`
+	WebConfig     []byte `db:"web_config"`
 }
 
 type Sync struct {
@@ -200,7 +201,7 @@ func (db *StatusDB) GetProperties(ctx context.Context) (*Properties, error) {
 		return nil, err
 	}
 
-	rows, err := db.QueryxContext(ctx, "SELECT created, mirror, mirror_urls FROM properties WHERE id = 1")
+	rows, err := db.QueryxContext(ctx, "SELECT created, mirror, mirror_configs, web_config FROM properties WHERE id = 1")
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +230,7 @@ func (db *StatusDB) UpdateProperties(ctx context.Context, properties *Properties
 	db.Lock()
 	result, err := db.NamedExecContext(
 		ctx,
-		"UPDATE properties SET created = :created, mirror = :mirror, mirror_urls = :mirror_urls WHERE id = 1",
+		"UPDATE properties SET created = :created, mirror = :mirror, mirror_configs = :mirror_configs, web_config = :web_config WHERE id = 1",
 		properties,
 	)
 	db.Unlock()
