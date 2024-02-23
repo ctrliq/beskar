@@ -211,3 +211,51 @@ func NetworkRetries(n int) Option {
 		)
 	}
 }
+
+// MaxOutstandingFetcherRequests sets the max-outstanding-fetcher-requests option to the given value in the pull options.
+// The max amount of concurrent connections allowed.
+func MaxOutstandingFetcherRequests(n uint32) Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		key := C.CString("max-outstanding-fetcher-requests")
+		deferFree(unsafe.Pointer(key))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_new_uint32(C.guint32(n))),
+		)
+	}
+}
+
+// HTTPHeaders sets the http-headers option to the given value in the pull options.
+// Additional HTTP headers to send with requests.
+func HTTPHeaders(headers map[string]string) Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		// Array of string tuples
+		typeStr := C.CString("a(ss)")
+		defer C.free(unsafe.Pointer(typeStr))
+		variantType := C.g_variant_type_new(typeStr)
+
+		// NOTE THE USE OF A NESTED BUILDER HERE - BE CAREFUL!
+		// The builder is freed by g_variant_builder_end below.
+		// See https://docs.gtk.org/glib/method.VariantBuilder.init.html
+		var hdrBuilder C.GVariantBuilder
+		C.g_variant_builder_init(&hdrBuilder, variantType)
+
+		// Add headers to hdrBuilder (not builder)
+		for key, value := range headers {
+			gVariantBuilderAddStringTuple(
+				&hdrBuilder,
+				C.CString(key),
+				C.CString(value),
+			)
+		}
+
+		key := C.CString("http-headers")
+		deferFree(unsafe.Pointer(key))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_builder_end(&hdrBuilder)),
+		)
+	}
+}
