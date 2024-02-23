@@ -128,3 +128,7 @@ configData:
       bucket: beskar-ostree
     azure:
       container: beskar-ostree
+
+  sync:
+    timeout: 3600s # 1 hour
+    max_worker_count: 10

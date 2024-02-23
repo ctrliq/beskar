@@ -6,7 +6,8 @@ package apiv1
 import (
 	"context"
 	"regexp"
-	"time"
+
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -64,8 +65,8 @@ type OSTreeRepositorySyncRequest struct {
 	// Depth - The depth of the mirror. Defaults is 0, -1 means infinite.
 	Depth int `json:"depth"`
 
-	// Timeout - The timeout for the sync in seconds. Default is 20 minutes.
-	Timeout time.Duration `json:"timeout"`
+	// Timeout - The timeout for the sync in seconds. Default is 1 hour.
+	Timeout *durationpb.Duration `json:"timeout"`
 }
 
 // Mirror sync status.
