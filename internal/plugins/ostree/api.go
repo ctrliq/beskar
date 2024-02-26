@@ -8,6 +8,7 @@ import (
 
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/ostree/api/v1"
 )
@@ -72,8 +73,8 @@ func (p *Plugin) SyncRepository(ctx context.Context, repository string, properti
 		return err
 	}
 
-	if properties.Timeout <= 0 {
-		properties.Timeout = p.handlerParams.Sync.GetTimeout()
+	if properties.Timeout == nil || !properties.Timeout.IsValid() || properties.Timeout.GetSeconds() <= 0 {
+		properties.Timeout = durationpb.New(p.handlerParams.Sync.GetTimeout())
 	}
 
 	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, properties)

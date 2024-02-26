@@ -131,4 +131,4 @@ configData:
 
   sync:
     timeout: 3600s # 1 hour
-    max_worker_count: 10
+    max_worker_count: 100
