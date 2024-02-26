@@ -48,6 +48,9 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/azure"
 	// load distribution gcs storage driver
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/gcs"
+
+	// load distribution cloudfront storage middleware
+	_ "github.com/distribution/distribution/v3/registry/storage/driver/middleware/cloudfront"
 )
 
 var serverPluginContextKey int
