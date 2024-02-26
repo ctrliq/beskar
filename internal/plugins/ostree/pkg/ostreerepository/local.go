@@ -151,6 +151,6 @@ func (h *Handler) standardPullOptions(more ...libostree.Option) []libostree.Opti
 		libostree.NoGPGVerify(),
 		libostree.Flags(libostree.Mirror | libostree.TrustedHTTP),
 		libostree.MaxOutstandingFetcherRequests(uint32(h.Params.Sync.GetMaxWorkerCount())),
-		libostree.AppendUserAgent("beskar-ostree"), //TODO: Inject version here
+		libostree.AppendUserAgent("beskar-ostree"), // TODO: Inject version here
 	}, more...)
 }
