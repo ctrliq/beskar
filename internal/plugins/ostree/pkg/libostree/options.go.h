@@ -12,3 +12,12 @@ g_variant_builder_add_variant(
 ) {
     g_variant_builder_add(builder, "{s@v}", key, value);
 }
+
+void
+g_variant_builder_add_string_tuple(
+    GVariantBuilder *builder,
+    const gchar *key,
+    const char *value
+) {
+    g_variant_builder_add(builder, "(ss)", key, value);
+}

@@ -69,6 +69,18 @@ type Registry struct {
 	hashedHostname string
 }
 
+//nolint:gochecknoinits
+func init() {
+	// Set http transport to avoid idle connections
+	// This propagates to all http clients created by the registry as they use http.DefaultTransport.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 16
+	transport.IdleConnTimeout = 10 * time.Second
+
+	http.DefaultTransport = transport
+}
+
 func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) {
 	beskarRegistry := &Registry{
 		beskarConfig: beskarConfig,

@@ -5,30 +5,24 @@ package config
 
 import (
 	"time"
-
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
 	DefaultSyncTimeout        = time.Hour
-	DefaultSyncMaxWorkerCount = 10
+	DefaultSyncMaxWorkerCount = 100
 )
 
 type SyncConfig struct {
-	Timeout        *durationpb.Duration `yaml:"timeout"`
-	MaxWorkerCount int                  `yaml:"max_worker_count"`
+	Timeout        time.Duration `yaml:"timeout"`
+	MaxWorkerCount int           `yaml:"max_worker_count"`
 }
 
 func (sc *SyncConfig) GetTimeout() time.Duration {
-	if sc.Timeout == nil {
+	if sc.Timeout <= 0 {
 		return DefaultSyncTimeout
 	}
 
-	if !sc.Timeout.IsValid() || sc.Timeout.GetSeconds() <= 0 {
-		return DefaultSyncTimeout
-	}
-
-	return sc.Timeout.AsDuration()
+	return sc.Timeout
 }
 
 func (sc *SyncConfig) GetMaxWorkerCount() int {

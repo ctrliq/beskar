@@ -86,7 +86,7 @@ func (h *Handler) DeleteRepository(ctx context.Context) (err error) {
 			// Create a worker pool to deleting each file in the repository concurrently.
 			// ctx will be cancelled on error, and the error will be returned.
 			eg, ctx := errgroup.WithContext(ctx)
-			eg.SetLimit(100)
+			eg.SetLimit(h.Params.Sync.GetMaxWorkerCount())
 
 			// Walk the directory tree, skipping directories and deleting each file.
 			if err := filepath.WalkDir(h.repoDir, func(path string, d os.DirEntry, err error) error {
@@ -278,10 +278,7 @@ func (h *Handler) SyncRepository(_ context.Context, properties *apiv1.OSTreeRepo
 
 		err = h.BeginLocalRepoTransaction(ctx, func(ctx context.Context, repo *libostree.Repo) (commit bool, transactionFnErr error) {
 			// Pull the latest changes from the remote.
-			opts := []libostree.Option{
-				libostree.Depth(properties.Depth),
-				libostree.Flags(libostree.Mirror | libostree.TrustedHTTP),
-			}
+			opts := h.standardPullOptions(libostree.Depth(properties.Depth))
 			if len(properties.Refs) > 0 {
 				opts = append(opts, libostree.Refs(properties.Refs...))
 			}

@@ -60,7 +60,8 @@ type pluginManager struct {
 
 func newPluginManager(registry distribution.Namespace, logger *logrus.Entry) *pluginManager {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.IdleConnTimeout = 30 * time.Second
+	transport.IdleConnTimeout = 10 * time.Second
+	transport.MaxIdleConns = 0
 	transport.MaxIdleConnsPerHost = 16
 
 	reverseProxy := &httputil.ReverseProxy{

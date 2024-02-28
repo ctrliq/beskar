@@ -51,6 +51,10 @@ func gVariantBuilderAddVariant(builder *C.GVariantBuilder, key *C.gchar, variant
 	C.g_variant_builder_add_variant(builder, key, variant)
 }
 
+func gVariantBuilderAddStringTuple(builder *C.GVariantBuilder, key, value *C.gchar) {
+	C.g_variant_builder_add_string_tuple(builder, key, value)
+}
+
 // NoGPGVerify sets the gpg-verify option to false in the pull options.
 func NoGPGVerify() Option {
 	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {

@@ -104,8 +104,11 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 		if err := repo.Pull(
 			ctx,
 			beskarRemoteName,
-			libostree.NoGPGVerify(),
-			libostree.Flags(libostree.Mirror|libostree.TrustedHTTP),
+			h.standardPullOptions(
+				libostree.HTTPHeaders(map[string]string{
+					"Connection": "close",
+				}),
+			)...,
 		); err != nil {
 			return ctl.Errf("pulling ostree repository from %s: %s", beskarRemoteName, err)
 		}
@@ -141,4 +144,13 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 	}
 
 	return nil
+}
+
+func (h *Handler) standardPullOptions(more ...libostree.Option) []libostree.Option {
+	return append([]libostree.Option{
+		libostree.NoGPGVerify(),
+		libostree.Flags(libostree.Mirror | libostree.TrustedHTTP),
+		libostree.MaxOutstandingFetcherRequests(uint32(h.Params.Sync.GetMaxWorkerCount())),
+		libostree.AppendUserAgent("beskar-ostree"), // TODO: Inject version here
+	}, more...)
 }

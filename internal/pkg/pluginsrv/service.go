@@ -300,6 +300,9 @@ func getBeskarTransport(caPEM *mtls.CAPEM, beskarMeta *gossip.BeskarMeta) (http.
 	beskarAddr := net.JoinHostPort(beskarMeta.Hostname, strconv.Itoa(int(beskarMeta.RegistryPort)))
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 16
+	transport.IdleConnTimeout = 10 * time.Second
 
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if addr == beskarAddr {
