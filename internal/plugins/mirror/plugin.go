@@ -26,7 +26,7 @@ import (
 	"go.ciq.dev/beskar/internal/plugins/mirror/pkg/mirrorrepository"
 	pluginv1 "go.ciq.dev/beskar/pkg/api/plugin/v1"
 	"go.ciq.dev/beskar/pkg/mtls"
-	"go.ciq.dev/beskar/pkg/orasfile"
+	"go.ciq.dev/beskar/pkg/orasmirror"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/mirror/api/v1"
 	"go.ciq.dev/beskar/pkg/version"
 )
@@ -92,7 +92,7 @@ func New(ctx context.Context, beskarMirrorConfig *config.BeskarMirrorConfig) (*P
 	plugin.config.Info = &pluginv1.Info{
 		Name:       "mirror",
 		Version:    version.Semver,
-		Mediatypes: []string{orasfile.StaticFileConfigType},
+		Mediatypes: []string{orasmirror.MirrorFileConfigType},
 		Router: &pluginv1.Router{
 			Rego: routerRego,
 			Data: routerData,
