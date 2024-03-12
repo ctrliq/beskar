@@ -110,6 +110,11 @@ func printOutput(ctx context.Context, dc *dagger.Container) error {
 		return err
 	}
 	fmt.Printf("%s", output)
+
+	if strings.Contains(output, "Test Suite Failed\n") {
+		return fmt.Errorf("test suite failed")
+	}
+
 	return nil
 }
 
