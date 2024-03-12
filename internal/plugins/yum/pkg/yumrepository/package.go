@@ -6,7 +6,6 @@ package yumrepository
 import (
 	"bytes"
 	"context"
-	"crypto/md5" //nolint:gosec
 	"fmt"
 	"io"
 	"os"
@@ -187,12 +186,6 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 	}
 	defer r.Close()
 
-	if err := md5Check(r); err != nil {
-		return nil, err
-	} else if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	}
-
 	if keyring != nil {
 		if _, err := rpm.GPGCheck(r, keyring); err != nil {
 			return nil, err
@@ -228,37 +221,4 @@ func validatePackage(packageID, packagePath string, keyring openpgp.KeyRing) (*y
 		Verified:     keyring != nil,
 		GPGSignature: pkg.GPGSignature().String(),
 	}, nil
-}
-
-//go:linkname readSigHeader github.com/cavaliergopher/rpm.readSigHeader
-func readSigHeader(r io.Reader) (*rpm.Header, error)
-
-func md5Check(r io.Reader) error {
-	sigheader, err := readSigHeader(r)
-	if err != nil {
-		return err
-	}
-	payloadSize := sigheader.GetTag(270).Int64() // RPMSIGTAG_LONGSIGSIZE
-	if payloadSize == 0 {
-		payloadSize = sigheader.GetTag(1000).Int64() // RPMSIGTAG_SIGSIZE
-		if payloadSize == 0 {
-			return fmt.Errorf("tag not found: RPMSIGTAG_SIZE")
-		}
-	}
-	expect := sigheader.GetTag(1004).Bytes() // RPMSIGTAG_MD5
-	if expect == nil {
-		return fmt.Errorf("tag not found: RPMSIGTAG_MD5")
-	}
-	//nolint:gosec
-	h := md5.New()
-	if n, err := io.Copy(h, r); err != nil {
-		return err
-	} else if n != payloadSize {
-		return rpm.ErrMD5CheckFailed
-	}
-	actual := h.Sum(nil)
-	if !bytes.Equal(expect, actual) {
-		return rpm.ErrMD5CheckFailed
-	}
-	return nil
 }
