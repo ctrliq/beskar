@@ -4,48 +4,112 @@
 package mirrorrepository
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5" //nolint:gosec
 	"encoding/hex"
-	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/antoniomika/go-rsync/rsync"
-	"go.ciq.dev/beskar/internal/plugins/mirror/pkg/index"
 	"go.ciq.dev/beskar/internal/plugins/mirror/pkg/mirrordb"
 	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasmirror"
+	"go.ciq.dev/go-rsync/rsync"
 )
 
-func (h *Handler) Put(filePath string, content io.Reader, fileSize int64, metadata rsync.FileMetadata) (written int64, err error) {
-	repoPath := h.Repository
+type Storage struct {
+	h        *Handler
+	config   mirrorConfig
+	configID uint64
+	pushChan chan pushMessage
+}
+
+type pushMessage struct {
+	filePath string
+	repoPath string
+}
+
+func NewStorage(h *Handler, config mirrorConfig, configID uint64) *Storage {
+	pushChan := make(chan pushMessage)
+
+	for i := 0; i < h.Params.Sync.MaxWorkerCount; i++ {
+		go func() {
+			for msg := range pushChan {
+				repoPath := h.Repository
+				fileName := msg.filePath
+
+				dir, file := filepath.Split(fileName)
+				if dir != "" {
+					repoPath = h.Repository + "/" + filepath.Clean(dir)
+					fileName = file
+				}
+
+				f, err := os.Open(msg.filePath)
+				if err != nil {
+					h.logger.Error("Failed to open file", "error", err)
+					continue
+				}
+
+				h.logger.Debug("Pushing", "file", fileName, "repo", repoPath)
+				pusher, err := orasmirror.NewStaticFileStreamPusher(f, strings.ToLower(fileName), strings.ToLower(msg.repoPath), h.Params.NameOptions...)
+				if err != nil {
+					h.logger.Error("Failed to create pusher", "error", err)
+					f.Close()
+					continue
+				}
+
+				err = oras.Push(pusher, h.Params.RemoteOptions...)
+				if err != nil {
+					f.Close()
+					h.logger.Error("Failed to push file", "error", err)
+				}
+
+				f.Close()
+				os.Remove(msg.filePath)
+			}
+		}()
+	}
+
+	return &Storage{
+		h:        h,
+		config:   config,
+		configID: configID,
+		pushChan: pushChan,
+	}
+}
+
+func (s *Storage) Put(filePath string, content io.Reader, fileSize int64, metadata rsync.FileMetadata) (written int64, err error) {
+	repoPath := s.h.Repository
 	fileName := filePath
 
 	// Only handle regular file content
 	if metadata.Mode.IsREG() {
-		dir, file := filepath.Split(fileName)
+		dir, _ := filepath.Split(fileName)
 		if dir != "" {
-			repoPath = h.Repository + "/" + filepath.Clean(dir)
-			fileName = file
+			repoPath = filepath.Join(s.h.Repository, dir)
 		}
 
-		pusher, err := orasmirror.NewStaticFileStreamPusher(content, strings.ToLower(fileName), strings.ToLower(repoPath), h.Params.NameOptions...)
+		err := os.MkdirAll(filepath.Dir(filepath.Join(s.h.downloadDir(), filePath)), 0o755)
 		if err != nil {
 			return 0, err
 		}
 
-		err = oras.Push(pusher, h.Params.RemoteOptions...)
+		err = copyTo(content, filepath.Join(s.h.downloadDir(), filePath))
 		if err != nil {
 			return 0, err
+		}
+
+		s.pushChan <- pushMessage{
+			filePath: filepath.Join(s.h.downloadDir(), filePath),
+			repoPath: repoPath,
 		}
 	}
 
-	fileReference := filepath.Clean(h.generateFileReference(strings.ToLower(filePath)))
+	fileReference := filepath.Clean(s.h.generateFileReference(strings.ToLower(filePath)))
+
+	name := filepath.Clean(filePath)
 
 	var link string
 	if metadata.Mode.IsLNK() {
@@ -54,22 +118,28 @@ func (h *Handler) Put(filePath string, content io.Reader, fileSize int64, metada
 			return 0, err
 		}
 
-		intermediate := filepath.Clean(h.generateFileReference(strings.ToLower(string(c))))
-		target := strings.TrimPrefix(intermediate, h.Repository)
+		intermediate := filepath.Clean(s.h.generateFileReference(strings.ToLower(string(c))))
+		target := strings.TrimPrefix(intermediate, s.h.Repository)
 		link = filepath.Join(filepath.Dir(fileReference), target)
+
+		// Set reference on links to something unique, but not used
+		fileReference = name
 	}
 
 	//nolint:gosec
-	s := md5.Sum([]byte(fileReference))
-	tag := hex.EncodeToString(s[:])
+	sum := md5.Sum([]byte(fileReference))
+	tag := hex.EncodeToString(sum[:])
 
-	err = h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
+	err = s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
 		Tag:          tag,
-		Name:         fileReference,
+		Name:         name,
+		Reference:    fileReference,
+		Parent:       filepath.Dir(name),
 		Link:         link,
 		ModifiedTime: int64(metadata.Mtime),
 		Mode:         uint32(metadata.Mode),
 		Size:         uint64(fileSize),
+		ConfigID:     s.configID,
 	})
 	if err != nil {
 		return 0, err
@@ -78,10 +148,10 @@ func (h *Handler) Put(filePath string, content io.Reader, fileSize int64, metada
 	return fileSize, nil
 }
 
-func (h *Handler) Delete(filePath string, _ rsync.FileMode) error {
-	fileReference := h.generateFileReference(filePath)
+func (s *Storage) Delete(filePath string, _ rsync.FileMode) error {
+	fileReference := s.h.generateFileReference(filePath)
 
-	err := h.removeFileFromRepositoryDatabase(context.Background(), fileReference)
+	err := s.h.removeFileFromRepositoryDatabase(context.Background(), fileReference)
 	if err != nil {
 		return err
 	}
@@ -89,15 +159,15 @@ func (h *Handler) Delete(filePath string, _ rsync.FileMode) error {
 	return nil
 }
 
-func (h *Handler) List() (rsync.FileList, error) {
-	repositoryFiles, err := h.listRepositoryFiles(context.Background())
+func (s *Storage) List() (rsync.FileList, error) {
+	repositoryFiles, err := s.h.listRepositoryFilesByConfigID(context.Background(), s.configID)
 	if err != nil {
 		return nil, err
 	}
 
 	var fileList rsync.FileList
 	for _, repositoryFile := range repositoryFiles {
-		path := filepath.Clean(strings.TrimPrefix(repositoryFile.Name, h.Repository))
+		path := filepath.Clean(repositoryFile.Name)
 		path = filepath.Clean(strings.TrimPrefix(path, "/"))
 
 		fileList = append(fileList, rsync.FileInfo{
@@ -113,102 +183,6 @@ func (h *Handler) List() (rsync.FileList, error) {
 	return fileList, nil
 }
 
-func (h *Handler) GenerateIndexes(remoteList rsync.FileList) error {
-	indexes := map[string][]rsync.FileInfo{}
-	directoryMap := map[string]rsync.FileInfo{}
-	orderedDirectories := []string{}
-
-	for _, f := range remoteList {
-		if f.Mode.IsDIR() {
-			directoryMap[filepath.Clean(string(f.Path))] = f
-		}
-
-		indexes[filepath.Dir(string(f.Path))] = append(indexes[filepath.Dir(string(f.Path))], f)
-	}
-
-	for d := range indexes {
-		orderedDirectories = append(orderedDirectories, d)
-	}
-
-	sort.Strings(orderedDirectories)
-
-	for _, dir := range orderedDirectories {
-		dirInfo := directoryMap[dir]
-		fis := indexes[dir]
-
-		c := index.Config{
-			Current:  filepath.Clean(fmt.Sprintf("/artifacts/mirror/web/v1/%s/%s", strings.TrimPrefix(h.Repository, "artifacts/mirror/"), filepath.Clean(dir))),
-			Previous: filepath.Clean(fmt.Sprintf("/artifacts/mirror/web/v1/%s/%s", strings.TrimPrefix(h.Repository, "artifacts/mirror/"), filepath.Dir(dir))),
-		}
-		for _, fi := range fis {
-			if fi.Mode.IsDIR() {
-				if string(fi.Path) == "." {
-					continue
-				}
-
-				c.Directories = append(c.Directories, index.Directory{
-					Name:  filepath.Base(string(fi.Path)),
-					Ref:   fmt.Sprintf("/artifacts/mirror/web/v1/%s/%s", strings.TrimPrefix(h.Repository, "artifacts/mirror/"), filepath.Clean(string(fi.Path))),
-					MTime: time.Unix(int64(fi.Mtime), 0),
-				})
-			} else if fi.Mode.IsLNK() {
-				fileReference := filepath.Clean(h.generateFileReference(strings.ToLower(string(fi.Path))))
-				file, err := h.getRepositoryFile(context.Background(), fileReference)
-				if err != nil {
-					return err
-				}
-
-				// NOTE: Assume all symlinks are to directories for now.
-				c.Directories = append(c.Directories, index.Directory{
-					Name:  filepath.Base(string(fi.Path)),
-					Ref:   fmt.Sprintf("/artifacts/mirror/web/v1/%s", strings.TrimPrefix(filepath.Clean(file.Link), "artifacts/mirror/")),
-					MTime: time.Unix(int64(fi.Mtime), 0),
-				})
-			} else {
-				dir, file := filepath.Split(string(fi.Path))
-				ref := fmt.Sprintf("/%s/%s/file/%s", h.Repository, filepath.Clean(dir), file)
-
-				c.Files = append(c.Files, index.File{
-					Name:  filepath.Base(string(fi.Path)),
-					Ref:   ref,
-					MTime: time.Unix(int64(fi.Mtime), 0),
-					Size:  uint64(fi.Size),
-				})
-			}
-		}
-
-		rawIndex, err := index.Generate(c)
-		if err != nil {
-			return err
-		}
-
-		dir = filepath.Join(h.Repository, dir)
-
-		pusher, err := orasmirror.NewStaticFileStreamPusher(bytes.NewReader(rawIndex), "index.html", strings.ToLower(dir), h.Params.NameOptions...)
-		if err != nil {
-			return err
-		}
-
-		err = oras.Push(pusher, h.Params.RemoteOptions...)
-		if err != nil {
-			return err
-		}
-
-		//nolint:gosec
-		s := md5.Sum([]byte(dir))
-		tag := hex.EncodeToString(s[:])
-
-		err = h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-			Tag:          tag,
-			Name:         dir,
-			ModifiedTime: int64(dirInfo.Mtime),
-			Mode:         uint32(dirInfo.Mode),
-			Size:         uint64(dirInfo.Size),
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (s *Storage) Close() {
+	close(s.pushChan)
 }

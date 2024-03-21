@@ -62,7 +62,8 @@ func New(ctx context.Context, beskarMirrorConfig *config.BeskarMirrorConfig) (*P
 	plugin := &Plugin{
 		ctx: ctx,
 		handlerParams: &repository.HandlerParams{
-			Dir: filepath.Join(beskarMirrorConfig.DataDir, "_repohandlers_"),
+			Dir:  filepath.Join(beskarMirrorConfig.DataDir, "_repohandlers_"),
+			Sync: beskarMirrorConfig.Sync,
 		},
 	}
 	plugin.repositoryManager = repository.NewManager[*mirrorrepository.Handler](

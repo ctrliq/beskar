@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/antoniomika/go-rsync/rsync"
 	"go.ciq.dev/beskar/pkg/oras"
 	"go.ciq.dev/beskar/pkg/orasmirror"
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/mirror/api/v1"
+	"go.ciq.dev/go-rsync/rsync"
 )
 
 func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.RepositoryFile, error) {
@@ -30,8 +30,8 @@ func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.Repository
 		// Check if file has a symlink in its path and replace it
 		var replacement string
 		for _, symlink := range symlinks {
-			if strings.HasPrefix(intermediate, symlink.Name) {
-				replacement = strings.Replace(intermediate, symlink.Name, symlink.Link, 1)
+			if strings.HasPrefix(intermediate, symlink.Reference) {
+				replacement = strings.Replace(intermediate, symlink.Reference, symlink.Link, 1)
 				break
 			}
 		}
@@ -39,7 +39,7 @@ func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.Repository
 			return nil, fmt.Errorf("not found")
 		}
 
-		repositoryFile, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFile(p.ctx, replacement)
+		repositoryFile, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFileByReference(p.ctx, replacement)
 		if err != nil && !strings.Contains(err.Error(), "no entry found") {
 			return nil, err
 		} else if err == nil {
@@ -56,8 +56,13 @@ func (p *Plugin) WebHandler(w http.ResponseWriter, r *http.Request) {
 	subPath := strings.TrimPrefix(r.URL.Path, "/artifacts/mirror/web/v1/")
 
 	repositoryName := strings.SplitN(subPath, "/", 2)[0]
+
+	fileName := "."
+	if len(strings.SplitN(subPath, "/", 2)) > 1 {
+		fileName = filepath.Clean(strings.SplitN(subPath, "/", 2)[1])
+	}
+
 	repository := fmt.Sprintf("artifacts/mirror/%s", repositoryName)
-	fileName := filepath.Join("artifacts/mirror", subPath)
 
 	if err := checkRepository(repository); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -81,15 +86,26 @@ func (p *Plugin) WebHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Redirect to file api to fetch blob signed url
 	if rsync.FileMode(repositoryFile.Mode).IsREG() {
-		repo, file := filepath.Split(repositoryFile.Name)
+		repo, file := filepath.Split(repositoryFile.Reference)
 		http.Redirect(w, r, fmt.Sprintf("/%s/file/%s", repo, file), http.StatusMovedPermanently)
 		return
 	} else if rsync.FileMode(repositoryFile.Mode).IsLNK() {
-		repositoryFile.Name = repositoryFile.Link
+		file, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFileByReferenceRaw(p.ctx, repositoryFile.Link)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if !rsync.FileMode(file.Mode).IsDIR() {
+			repo, file := filepath.Split(file.Reference)
+			http.Redirect(w, r, fmt.Sprintf("/%s/file/%s", repo, file), http.StatusMovedPermanently)
+		}
+
+		repositoryFile.Reference = repositoryFile.Link
 	}
 
 	// Fetch index.html for directory listing
-	ref, err := orasmirror.FileReference("index.html", strings.ToLower(repositoryFile.Name), p.handlerParams.NameOptions...)
+	ref, err := orasmirror.FileReference("index.html", strings.ToLower(repositoryFile.Reference), p.handlerParams.NameOptions...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -132,6 +132,102 @@ func (c *HTTPClient) DeleteRepository(ctx context.Context, repository string, de
 	return nil
 }
 
+func (c *HTTPClient) DeleteRepositoryFile(ctx context.Context, repository string, file string) (err error) {
+	codec := c.codecs.EncodeDecoder("DeleteRepositoryFile")
+
+	path := "/repository/file"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+		File       string `json:"file"`
+	}{
+		Repository: repository,
+		File:       file,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "DELETE", u.String(), reqBodyReader)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (c *HTTPClient) GenerateRepository(ctx context.Context, repository string) (err error) {
+	codec := c.codecs.EncodeDecoder("GenerateRepository")
+
+	path := "/repository/generate:web"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+	}{
+		Repository: repository,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (c *HTTPClient) GetRepository(ctx context.Context, repository string) (properties *RepositoryProperties, err error) {
 	codec := c.codecs.EncodeDecoder("GetRepository")
 
@@ -236,6 +332,110 @@ func (c *HTTPClient) GetRepositoryFile(ctx context.Context, repository string, f
 		return nil, err
 	}
 	return respBody.RepositoryFile, nil
+}
+
+func (c *HTTPClient) GetRepositoryFileCount(ctx context.Context, repository string) (count int, err error) {
+	codec := c.codecs.EncodeDecoder("GetRepositoryFileCount")
+
+	path := "/repository/file:count"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+	}{
+		Repository: repository,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return 0, err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return 0, err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return 0, err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return 0, err
+	}
+
+	respBody := &GetRepositoryFileCountResponse{}
+	err = codec.DecodeSuccessResponse(_resp.Body, respBody.Body())
+	if err != nil {
+		return 0, err
+	}
+	return respBody.Count, nil
+}
+
+func (c *HTTPClient) GetRepositorySyncPlan(ctx context.Context, repository string) (syncPlan *RepositorySyncPlan, err error) {
+	codec := c.codecs.EncodeDecoder("GetRepositorySyncPlan")
+
+	path := "/repository/sync:plan"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+	}{
+		Repository: repository,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "GET", u.String(), reqBodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return nil, err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return nil, err
+	}
+
+	respBody := &GetRepositorySyncPlanResponse{}
+	err = codec.DecodeSuccessResponse(_resp.Body, respBody.Body())
+	if err != nil {
+		return nil, err
+	}
+	return respBody.SyncPlan, nil
 }
 
 func (c *HTTPClient) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *SyncStatus, err error) {

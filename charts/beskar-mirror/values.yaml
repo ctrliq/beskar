@@ -128,3 +128,6 @@ configData:
       bucket: beskar-mirror
     azure:
       container: beskar-mirror
+
+  sync:
+    max_worker_count: 50

@@ -53,11 +53,25 @@ func (p *Plugin) SyncRepository(ctx context.Context, repository string, wait boo
 	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, wait)
 }
 
+func (p *Plugin) GenerateRepository(ctx context.Context, repository string) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).GenerateRepository(ctx)
+}
+
 func (p *Plugin) GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *apiv1.SyncStatus, err error) {
 	if err := checkRepository(repository); err != nil {
 		return nil, err
 	}
 	return p.repositoryManager.Get(ctx, repository).GetRepositorySyncStatus(ctx)
+}
+
+func (p *Plugin) GetRepositorySyncPlan(ctx context.Context, repository string) (syncPlan *apiv1.RepositorySyncPlan, err error) {
+	if err := checkRepository(repository); err != nil {
+		return nil, err
+	}
+	return p.repositoryManager.Get(ctx, repository).GetRepositorySyncPlan(ctx)
 }
 
 func (p *Plugin) ListRepositoryLogs(ctx context.Context, repository string, page *apiv1.Page) (logs []apiv1.RepositoryLog, err error) {
@@ -79,4 +93,18 @@ func (p *Plugin) GetRepositoryFile(ctx context.Context, repository, file string)
 		return nil, err
 	}
 	return p.repositoryManager.Get(ctx, repository).GetRepositoryFile(ctx, file)
+}
+
+func (p *Plugin) GetRepositoryFileCount(ctx context.Context, repository string) (count int, err error) {
+	if err := checkRepository(repository); err != nil {
+		return 0, err
+	}
+	return p.repositoryManager.Get(ctx, repository).GetRepositoryFileCount(ctx)
+}
+
+func (p *Plugin) DeleteRepositoryFile(ctx context.Context, repository, file string) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).DeleteRepositoryFile(ctx, file)
 }

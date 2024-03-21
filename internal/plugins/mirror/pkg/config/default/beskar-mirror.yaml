@@ -35,3 +35,6 @@ storage:
     container: beskar-mirror
     account-name: account_name
     account-key: base64_encoded_account_key
+
+sync:
+  max_worker_count: 50

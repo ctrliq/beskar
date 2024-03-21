@@ -11,7 +11,9 @@ td, th {
 <hr>
 <table>
   <tbody>
+{{- if .Previous }}
     <td><a href="{{ .Previous }}">../</td>
+{{- end }}
 {{- range $dir := .Directories }}
     <tr>
       <td><a href="{{ $dir.Ref }}/">{{ $dir.Name }}/</a></td>

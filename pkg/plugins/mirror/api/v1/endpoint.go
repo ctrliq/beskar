@@ -85,6 +85,78 @@ func MakeEndpointOfDeleteRepository(s Mirror) endpoint.Endpoint {
 	}
 }
 
+type DeleteRepositoryFileRequest struct {
+	Repository string `json:"repository"`
+	File       string `json:"file"`
+}
+
+// ValidateDeleteRepositoryFileRequest creates a validator for DeleteRepositoryFileRequest.
+func ValidateDeleteRepositoryFileRequest(newSchema func(*DeleteRepositoryFileRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*DeleteRepositoryFileRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type DeleteRepositoryFileResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *DeleteRepositoryFileResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *DeleteRepositoryFileResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfDeleteRepositoryFile creates the endpoint for s.DeleteRepositoryFile.
+func MakeEndpointOfDeleteRepositoryFile(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*DeleteRepositoryFileRequest)
+		err := s.DeleteRepositoryFile(
+			ctx,
+			req.Repository,
+			req.File,
+		)
+		return &DeleteRepositoryFileResponse{
+			Err: err,
+		}, nil
+	}
+}
+
+type GenerateRepositoryRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateGenerateRepositoryRequest creates a validator for GenerateRepositoryRequest.
+func ValidateGenerateRepositoryRequest(newSchema func(*GenerateRepositoryRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*GenerateRepositoryRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type GenerateRepositoryResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *GenerateRepositoryResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *GenerateRepositoryResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfGenerateRepository creates the endpoint for s.GenerateRepository.
+func MakeEndpointOfGenerateRepository(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*GenerateRepositoryRequest)
+		err := s.GenerateRepository(
+			ctx,
+			req.Repository,
+		)
+		return &GenerateRepositoryResponse{
+			Err: err,
+		}, nil
+	}
+}
+
 type GetRepositoryRequest struct {
 	Repository string `json:"repository"`
 }
@@ -157,6 +229,80 @@ func MakeEndpointOfGetRepositoryFile(s Mirror) endpoint.Endpoint {
 		return &GetRepositoryFileResponse{
 			RepositoryFile: repositoryFile,
 			Err:            err,
+		}, nil
+	}
+}
+
+type GetRepositoryFileCountRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateGetRepositoryFileCountRequest creates a validator for GetRepositoryFileCountRequest.
+func ValidateGetRepositoryFileCountRequest(newSchema func(*GetRepositoryFileCountRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*GetRepositoryFileCountRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type GetRepositoryFileCountResponse struct {
+	Count int   `json:"count"`
+	Err   error `json:"-"`
+}
+
+func (r *GetRepositoryFileCountResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *GetRepositoryFileCountResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfGetRepositoryFileCount creates the endpoint for s.GetRepositoryFileCount.
+func MakeEndpointOfGetRepositoryFileCount(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*GetRepositoryFileCountRequest)
+		count, err := s.GetRepositoryFileCount(
+			ctx,
+			req.Repository,
+		)
+		return &GetRepositoryFileCountResponse{
+			Count: count,
+			Err:   err,
+		}, nil
+	}
+}
+
+type GetRepositorySyncPlanRequest struct {
+	Repository string `json:"repository"`
+}
+
+// ValidateGetRepositorySyncPlanRequest creates a validator for GetRepositorySyncPlanRequest.
+func ValidateGetRepositorySyncPlanRequest(newSchema func(*GetRepositorySyncPlanRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*GetRepositorySyncPlanRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type GetRepositorySyncPlanResponse struct {
+	SyncPlan *RepositorySyncPlan `json:"sync_plan"`
+	Err      error               `json:"-"`
+}
+
+func (r *GetRepositorySyncPlanResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *GetRepositorySyncPlanResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfGetRepositorySyncPlan creates the endpoint for s.GetRepositorySyncPlan.
+func MakeEndpointOfGetRepositorySyncPlan(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*GetRepositorySyncPlanRequest)
+		syncPlan, err := s.GetRepositorySyncPlan(
+			ctx,
+			req.Repository,
+		)
+		return &GetRepositorySyncPlanResponse{
+			SyncPlan: syncPlan,
+			Err:      err,
 		}, nil
 	}
 }

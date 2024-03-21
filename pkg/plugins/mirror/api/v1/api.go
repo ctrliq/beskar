@@ -24,12 +24,33 @@ type Page struct {
 	Token string
 }
 
+// Mirror content configurations.
+type MirrorConfig struct {
+	URL         string   `json:"url"`
+	HTTPURL     string   `json:"http_url"`
+	Destination string   `json:"destination"`
+	Exclusions  []string `json:"exclusions"`
+}
+
+// Web content configuration.
+type WebConfig struct {
+	Prefix string `json:"prefix"`
+}
+
 // Repository properties/configuration.
 type RepositoryProperties struct {
 	// Configure the repository as a mirror.
 	Mirror *bool `json:"mirror,omitempty"`
-	// Mirror/Upstream URLs for mirroring.
-	MirrorURLs []string `json:"mirror_urls,omitempty"`
+	// Mirror content configurations.
+	MirrorConfigs []MirrorConfig `json:"mirror_configs,omitempty"`
+	// Web content configuration.
+	WebConfig *WebConfig `json:"web_config,omitempty"`
+}
+
+// Repository synchronization plan.
+type RepositorySyncPlan struct {
+	Add    []string `json:"add"`
+	Remove []string `json:"remove"`
 }
 
 // Repository logs.
@@ -43,20 +64,21 @@ type RepositoryLog struct {
 type RepositoryFile struct {
 	Tag          string `json:"tag"`
 	Name         string `json:"name"`
+	Reference    string `json:"reference"`
+	Parent       string `json:"parent"`
 	Link         string `json:"link"`
 	ModifiedTime string `json:"modified_time"`
 	Mode         uint32 `json:"mode"`
 	Size         uint64 `json:"size"`
+	ConfigID     uint64 `json:"config_id"`
 }
 
 // Mirror sync status.
 type SyncStatus struct {
-	Syncing     bool   `json:"syncing"`
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	TotalFiles  int    `json:"total_files"`
-	SyncedFiles int    `json:"synced_files"`
-	SyncError   string `json:"sync_error"`
+	Syncing   bool   `json:"syncing"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	SyncError string `json:"sync_error"`
 }
 
 // Mirror is used for managing mirror repositories.
@@ -67,7 +89,7 @@ type SyncStatus struct {
 //kun:oas basePath=/artifacts/mirror/api/v1
 //kun:oas docsPath=/doc/swagger.yaml
 //kun:oas tags=mirror
-type Mirror interface {
+type Mirror interface { //nolint:interfacebloat
 	// Create a Mirror repository.
 	//kun:op POST /repository
 	//kun:success statusCode=200
@@ -93,10 +115,20 @@ type Mirror interface {
 	//kun:success statusCode=200
 	SyncRepository(ctx context.Context, repository string, wait bool) (err error)
 
+	// Generate Mirror web pages .
+	//kun:op GET /repository/generate:web
+	//kun:success statusCode=200
+	GenerateRepository(ctx context.Context, repository string) (err error)
+
 	// Get Mirror repository sync status.
 	//kun:op GET /repository/sync:status
 	//kun:success statusCode=200
 	GetRepositorySyncStatus(ctx context.Context, repository string) (syncStatus *SyncStatus, err error)
+
+	// Get Mirror repository sync plan.
+	//kun:op GET /repository/sync:plan
+	//kun:success statusCode=200
+	GetRepositorySyncPlan(ctx context.Context, repository string) (syncPlan *RepositorySyncPlan, err error)
 
 	// List Mirror repository logs.
 	//kun:op GET /repository/logs
@@ -112,4 +144,14 @@ type Mirror interface {
 	//kun:op GET /repository/file
 	//kun:success statusCode=200
 	GetRepositoryFile(ctx context.Context, repository, file string) (repositoryFile *RepositoryFile, err error)
+
+	// Get file count for a Mirror repository.
+	//kun:op GET /repository/file:count
+	//kun:success statusCode=200
+	GetRepositoryFileCount(ctx context.Context, repository string) (count int, err error)
+
+	// Delete file for a Mirror repository.
+	//kun:op DELETE /repository/file
+	//kun:success statusCode=200
+	DeleteRepositoryFile(ctx context.Context, repository, file string) (err error)
 }

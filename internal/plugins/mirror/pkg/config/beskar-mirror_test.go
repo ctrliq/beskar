@@ -47,4 +47,6 @@ func TestParseBeskarMirrorConfig(t *testing.T) {
 	require.Equal(t, "0.0.0.0:5501", bc.Gossip.Addr)
 	require.Equal(t, "XD1IOhcp0HWFgZJ/HAaARqMKJwfMWtz284Yj7wxmerA=", bc.Gossip.Key)
 	require.Equal(t, []string{"127.0.0.1:5102"}, bc.Gossip.Peers)
+
+	require.Equal(t, 50, bc.Sync.MaxWorkerCount)
 }

@@ -75,6 +75,17 @@ paths:
             $ref: "#/definitions/UpdateRepositoryRequestBody"
       %s
   /repository/file:
+    delete:
+      description: "Delete file for a Mirror repository."
+      operationId: "DeleteRepositoryFile"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/DeleteRepositoryFileRequestBody"
+      %s
     get:
       description: "Get file for a Mirror repository."
       operationId: "GetRepositoryFile"
@@ -85,6 +96,42 @@ paths:
           in: body
           schema:
             $ref: "#/definitions/GetRepositoryFileRequestBody"
+      %s
+  /repository/generate:web:
+    get:
+      description: "Generate Mirror web pages ."
+      operationId: "GenerateRepository"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/GenerateRepositoryRequestBody"
+      %s
+  /repository/file:count:
+    get:
+      description: "Get file count for a Mirror repository."
+      operationId: "GetRepositoryFileCount"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/GetRepositoryFileCountRequestBody"
+      %s
+  /repository/sync:plan:
+    get:
+      description: "Get Mirror repository sync plan."
+      operationId: "GetRepositorySyncPlan"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/GetRepositorySyncPlanRequestBody"
       %s
   /repository/sync:status:
     get:
@@ -143,7 +190,11 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "DeleteRepository", 200, &DeleteRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepository", 200, &GetRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "UpdateRepository", 200, &UpdateRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "DeleteRepositoryFile", 200, &DeleteRepositoryFileResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositoryFile", 200, &GetRepositoryFileResponse{}),
+		oas2.GetOASResponses(schema, "GenerateRepository", 200, &GenerateRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "GetRepositoryFileCount", 200, &GetRepositoryFileCountResponse{}),
+		oas2.GetOASResponses(schema, "GetRepositorySyncPlan", 200, &GetRepositorySyncPlanResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncStatus", 200, &GetRepositorySyncStatusResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryFiles", 200, &ListRepositoryFilesResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryLogs", 200, &ListRepositoryLogsResponse{}),
@@ -166,6 +217,17 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "DeleteRepository", 200, (&DeleteRepositoryResponse{}).Body())
 
+	oas2.AddDefinition(defs, "DeleteRepositoryFileRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		File       string `json:"file"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "DeleteRepositoryFile", 200, (&DeleteRepositoryFileResponse{}).Body())
+
+	oas2.AddDefinition(defs, "GenerateRepositoryRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "GenerateRepository", 200, (&GenerateRepositoryResponse{}).Body())
+
 	oas2.AddDefinition(defs, "GetRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`
 	}{}))
@@ -176,6 +238,16 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		File       string `json:"file"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "GetRepositoryFile", 200, (&GetRepositoryFileResponse{}).Body())
+
+	oas2.AddDefinition(defs, "GetRepositoryFileCountRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "GetRepositoryFileCount", 200, (&GetRepositoryFileCountResponse{}).Body())
+
+	oas2.AddDefinition(defs, "GetRepositorySyncPlanRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "GetRepositorySyncPlan", 200, (&GetRepositorySyncPlanResponse{}).Body())
 
 	oas2.AddDefinition(defs, "GetRepositorySyncStatusRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`

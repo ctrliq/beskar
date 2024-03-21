@@ -96,14 +96,14 @@ func (h *Handler) getRepositoryFile(ctx context.Context, file string) (repositor
 	return fileDB, nil
 }
 
-func (h *Handler) listRepositoryFiles(ctx context.Context) (repositoryFiles []*mirrordb.RepositoryFile, err error) {
+func (h *Handler) listRepositoryFilesByParent(ctx context.Context, parent string) (repositoryFiles []*mirrordb.RepositoryFile, err error) {
 	db, err := h.getRepositoryDB(ctx)
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 	defer db.Close(false)
 
-	err = db.WalkFiles(ctx, func(file *mirrordb.RepositoryFile) error {
+	err = db.WalkFilesByParent(ctx, parent, func(file *mirrordb.RepositoryFile) error {
 		repositoryFiles = append(repositoryFiles, file)
 		return nil
 	})
@@ -112,4 +112,40 @@ func (h *Handler) listRepositoryFiles(ctx context.Context) (repositoryFiles []*m
 	}
 
 	return repositoryFiles, nil
+}
+
+func (h *Handler) listRepositoryFilesByConfigID(ctx context.Context, configID uint64) (repositoryFiles []*mirrordb.RepositoryFile, err error) {
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	err = db.WalkFilesByConfigID(ctx, configID, func(file *mirrordb.RepositoryFile) error {
+		repositoryFiles = append(repositoryFiles, file)
+		return nil
+	})
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return repositoryFiles, nil
+}
+
+func (h *Handler) listRepositoryDistinctParents(ctx context.Context) (repositoryParents []string, err error) {
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	err = db.WalkFilesByDistinctParent(ctx, func(parent *string) error {
+		repositoryParents = append(repositoryParents, *parent)
+		return nil
+	})
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return repositoryParents, nil
 }
