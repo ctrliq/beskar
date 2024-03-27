@@ -119,6 +119,11 @@ Create the name of the service account to use
   readOnly: true
 {{- end }}
 
+{{- if .Values.persistence.scratch.enabled }}
+- name: scratch
+  mountPath: /scratch
+{{- end }}
+
 {{- with .Values.extraVolumeMounts }}
 {{ toYaml . }}
 {{- end }}

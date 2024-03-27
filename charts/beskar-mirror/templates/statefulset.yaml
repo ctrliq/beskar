@@ -73,3 +73,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes: {{ include "beskar-mirror.volumes" . | nindent 8 }}
+  {{- if .Values.persistence.scratch.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: scratch
+      spec:
+        accessModes:
+          - {{ .Values.persistence.scratch.accessMode | quote }}
+        {{- if .Values.persistence.scratch.storageClassName }}
+        storageClassName: {{ .Values.persistence.scratch.storageClassName }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.scratch.size | quote }}
+  {{- end }}
