@@ -84,6 +84,11 @@ persistence:
   enabled: false
   size: 10Gi
   # storageClass: '-'
+  scratch:
+    accessMode: 'ReadWriteOnce'
+    enabled: false
+    size: 10Gi
+    # storageClass: '-'
 
 secrets:
   registry:
