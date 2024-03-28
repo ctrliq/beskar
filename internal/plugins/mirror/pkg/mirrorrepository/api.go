@@ -282,6 +282,53 @@ func (h *Handler) SyncRepository(_ context.Context, wait bool) (err error) {
 	return nil
 }
 
+func (h *Handler) SyncRepositoryWithConfig(_ context.Context, mirrorConfigs []apiv1.MirrorConfig, webConfig *apiv1.WebConfig, wait bool) (err error) {
+	if !h.Started() {
+		return werror.Wrap(gcode.ErrUnavailable, err)
+	} else if !h.getMirror() {
+		return werror.Wrap(gcode.ErrFailedPrecondition, errors.New("repository not setup as a mirror"))
+	}
+
+	// Set mirror configs if supplied.
+	if mirrorConfigs != nil {
+		if err := h.setMirrorConfigs(mirrorConfigs); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	// Set web config if supplied.
+	if webConfig != nil {
+		if err := h.setWebConfig(webConfig); err != nil {
+			return werror.Wrap(gcode.ErrInternal, err)
+		}
+	}
+
+	if h.delete.Load() {
+		return werror.Wrap(gcode.ErrAlreadyExists, fmt.Errorf("repository %s is being deleted", h.Repository))
+	} else if h.syncing.Swap(true) {
+		return werror.Wrap(gcode.ErrAlreadyExists, errors.New("a repository sync is already running"))
+	}
+
+	var waitErrCh chan error
+
+	if wait {
+		waitErrCh = make(chan error, 1)
+	}
+
+	select {
+	case h.syncCh <- waitErrCh:
+		if waitErrCh != nil {
+			if err := <-waitErrCh; err != nil {
+				return werror.Wrap(gcode.ErrInternal, fmt.Errorf("synchronization failed: %w", err))
+			}
+		}
+	default:
+		return werror.Wrap(gcode.ErrUnavailable, errors.New("something goes wrong"))
+	}
+
+	return nil
+}
+
 func (h *Handler) GenerateRepository(_ context.Context) (err error) {
 	if !h.Started() {
 		return werror.Wrap(gcode.ErrUnavailable, err)
@@ -530,6 +577,20 @@ func toRepositoryFileAPI(file *mirrordb.RepositoryFile) *apiv1.RepositoryFile {
 		Parent:       file.Parent,
 		Link:         file.Link,
 		ModifiedTime: utils.TimeToString(file.ModifiedTime),
+		Mode:         file.Mode,
+		Size:         file.Size,
+		ConfigID:     file.ConfigID,
+	}
+}
+
+func toRepositoryFileDB(file *apiv1.RepositoryFile) *mirrordb.RepositoryFile {
+	return &mirrordb.RepositoryFile{
+		Tag:          file.Tag,
+		Name:         file.Name,
+		Reference:    file.Reference,
+		Parent:       file.Parent,
+		Link:         file.Link,
+		ModifiedTime: utils.StringToTime(file.ModifiedTime),
 		Mode:         file.Mode,
 		Size:         file.Size,
 		ConfigID:     file.ConfigID,

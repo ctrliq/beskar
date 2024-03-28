@@ -459,6 +459,47 @@ func MakeEndpointOfSyncRepository(s Mirror) endpoint.Endpoint {
 	}
 }
 
+type SyncRepositoryWithConfigRequest struct {
+	Repository    string         `json:"repository"`
+	MirrorConfigs []MirrorConfig `json:"mirror_configs"`
+	WebConfig     *WebConfig     `json:"web_config"`
+	Wait          bool           `json:"wait"`
+}
+
+// ValidateSyncRepositoryWithConfigRequest creates a validator for SyncRepositoryWithConfigRequest.
+func ValidateSyncRepositoryWithConfigRequest(newSchema func(*SyncRepositoryWithConfigRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*SyncRepositoryWithConfigRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type SyncRepositoryWithConfigResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *SyncRepositoryWithConfigResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *SyncRepositoryWithConfigResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfSyncRepositoryWithConfig creates the endpoint for s.SyncRepositoryWithConfig.
+func MakeEndpointOfSyncRepositoryWithConfig(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*SyncRepositoryWithConfigRequest)
+		err := s.SyncRepositoryWithConfig(
+			ctx,
+			req.Repository,
+			req.MirrorConfigs,
+			req.WebConfig,
+			req.Wait,
+		)
+		return &SyncRepositoryWithConfigResponse{
+			Err: err,
+		}, nil
+	}
+}
+
 type UpdateRepositoryRequest struct {
 	Repository string                `json:"repository"`
 	Properties *RepositoryProperties `json:"properties"`
