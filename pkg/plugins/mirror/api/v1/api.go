@@ -62,15 +62,16 @@ type RepositoryLog struct {
 
 // Repository files.
 type RepositoryFile struct {
-	Tag          string `json:"tag"`
-	Name         string `json:"name"`
-	Reference    string `json:"reference"`
-	Parent       string `json:"parent"`
-	Link         string `json:"link"`
-	ModifiedTime string `json:"modified_time"`
-	Mode         uint32 `json:"mode"`
-	Size         uint64 `json:"size"`
-	ConfigID     uint64 `json:"config_id"`
+	Tag           string `json:"tag"`
+	Name          string `json:"name"`
+	Reference     string `json:"reference"`
+	Parent        string `json:"parent"`
+	Link          string `json:"link"`
+	LinkReference string `json:"link_reference"`
+	ModifiedTime  string `json:"modified_time"`
+	Mode          uint32 `json:"mode"`
+	Size          uint64 `json:"size"`
+	ConfigID      uint64 `json:"config_id"`
 }
 
 // Mirror sync status.
@@ -159,4 +160,9 @@ type Mirror interface { //nolint:interfacebloat
 	//kun:op DELETE /repository/file
 	//kun:success statusCode=200
 	DeleteRepositoryFile(ctx context.Context, repository, file string) (err error)
+
+	// Delete files by mode for a Mirror repository.
+	//kun:op DELETE /repository/file:mode
+	//kun:success statusCode=200
+	DeleteRepositoryFilesByMode(ctx context.Context, repository string, mode uint32) (err error)
 }

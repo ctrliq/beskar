@@ -119,15 +119,16 @@ func (s *PlanSyncer) filePush(remoteFile rsync.FileInfo) error {
 	name := filepath.Clean(string(remoteFile.Path))
 
 	err = s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-		Tag:          tag,
-		Name:         name,
-		Reference:    fileReference,
-		Parent:       filepath.Dir(name),
-		Link:         "",
-		ModifiedTime: int64(remoteFile.Mtime),
-		Mode:         uint32(remoteFile.Mode),
-		Size:         uint64(remoteFile.Size),
-		ConfigID:     s.configID,
+		Tag:           tag,
+		Name:          name,
+		Reference:     fileReference,
+		Parent:        filepath.Dir(name),
+		Link:          "",
+		LinkReference: "",
+		ModifiedTime:  int64(remoteFile.Mtime),
+		Mode:          uint32(remoteFile.Mode),
+		Size:          uint64(remoteFile.Size),
+		ConfigID:      s.configID,
 	})
 	if err != nil {
 		s.h.logger.Error("Failed to add file to repository database", "file", string(remoteFile.Path), "error", err)
@@ -184,15 +185,16 @@ func (s *PlanSyncer) Sync() error {
 			name := filepath.Clean(string(remoteFile.Path))
 
 			err := s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-				Tag:          tag,
-				Name:         name,
-				Reference:    fileReference,
-				Parent:       filepath.Dir(name),
-				Link:         "",
-				ModifiedTime: int64(remoteFile.Mtime),
-				Mode:         uint32(remoteFile.Mode),
-				Size:         uint64(remoteFile.Size),
-				ConfigID:     s.configID,
+				Tag:           tag,
+				Name:          name,
+				Reference:     fileReference,
+				Parent:        filepath.Dir(name),
+				Link:          "",
+				LinkReference: "",
+				ModifiedTime:  int64(remoteFile.Mtime),
+				Mode:          uint32(remoteFile.Mode),
+				Size:          uint64(remoteFile.Size),
+				ConfigID:      s.configID,
 			})
 			if err != nil {
 				return err
@@ -208,7 +210,7 @@ func (s *PlanSyncer) Sync() error {
 
 			intermediate := filepath.Clean(s.h.generateFileReference(strings.ToLower(string(linkContent))))
 			target := strings.TrimPrefix(intermediate, s.h.Repository)
-			link := filepath.Join(filepath.Dir(fileReference), target)
+			linkReference := filepath.Join(filepath.Dir(fileReference), target)
 
 			name := filepath.Clean(string(remoteFile.Path))
 
@@ -218,15 +220,16 @@ func (s *PlanSyncer) Sync() error {
 			tag := hex.EncodeToString(sum[:])
 
 			err := s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-				Tag:          tag,
-				Name:         name,
-				Reference:    name,
-				Parent:       filepath.Dir(name),
-				Link:         link,
-				ModifiedTime: int64(remoteFile.Mtime),
-				Mode:         uint32(remoteFile.Mode),
-				Size:         uint64(remoteFile.Size),
-				ConfigID:     s.configID,
+				Tag:           tag,
+				Name:          name,
+				Reference:     name,
+				Parent:        filepath.Dir(name),
+				Link:          string(linkContent),
+				LinkReference: linkReference,
+				ModifiedTime:  int64(remoteFile.Mtime),
+				Mode:          uint32(remoteFile.Mode),
+				Size:          uint64(remoteFile.Size),
+				ConfigID:      s.configID,
 			})
 			if err != nil {
 				return err

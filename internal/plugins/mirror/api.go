@@ -115,3 +115,10 @@ func (p *Plugin) DeleteRepositoryFile(ctx context.Context, repository, file stri
 	}
 	return p.repositoryManager.Get(ctx, repository).DeleteRepositoryFile(ctx, file)
 }
+
+func (p *Plugin) DeleteRepositoryFilesByMode(ctx context.Context, repository string, mode uint32) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).DeleteRepositoryFilesByMode(ctx, mode)
+}

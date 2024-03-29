@@ -122,6 +122,43 @@ func MakeEndpointOfDeleteRepositoryFile(s Mirror) endpoint.Endpoint {
 	}
 }
 
+type DeleteRepositoryFilesByModeRequest struct {
+	Repository string `json:"repository"`
+	Mode       uint32 `json:"mode"`
+}
+
+// ValidateDeleteRepositoryFilesByModeRequest creates a validator for DeleteRepositoryFilesByModeRequest.
+func ValidateDeleteRepositoryFilesByModeRequest(newSchema func(*DeleteRepositoryFilesByModeRequest) validating.Schema) httpoption.Validator {
+	return httpoption.FuncValidator(func(value interface{}) error {
+		req := value.(*DeleteRepositoryFilesByModeRequest)
+		return httpoption.Validate(newSchema(req))
+	})
+}
+
+type DeleteRepositoryFilesByModeResponse struct {
+	Err error `json:"-"`
+}
+
+func (r *DeleteRepositoryFilesByModeResponse) Body() interface{} { return r }
+
+// Failed implements endpoint.Failer.
+func (r *DeleteRepositoryFilesByModeResponse) Failed() error { return r.Err }
+
+// MakeEndpointOfDeleteRepositoryFilesByMode creates the endpoint for s.DeleteRepositoryFilesByMode.
+func MakeEndpointOfDeleteRepositoryFilesByMode(s Mirror) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*DeleteRepositoryFilesByModeRequest)
+		err := s.DeleteRepositoryFilesByMode(
+			ctx,
+			req.Repository,
+			req.Mode,
+		)
+		return &DeleteRepositoryFilesByModeResponse{
+			Err: err,
+		}, nil
+	}
+}
+
 type GenerateRepositoryRequest struct {
 	Repository string `json:"repository"`
 }

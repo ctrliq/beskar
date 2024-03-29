@@ -546,6 +546,25 @@ func (h *Handler) DeleteRepositoryFile(ctx context.Context, file string) (err er
 	return nil
 }
 
+func (h *Handler) DeleteRepositoryFilesByMode(ctx context.Context, mode uint32) (err error) {
+	if !h.Started() {
+		return werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	err = db.DeleteFilesByMode(ctx, mode)
+	if err != nil {
+		return werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return nil
+}
+
 func (h *Handler) removeRepositoryFile(ctx context.Context, file *mirrordb.RepositoryFile) error {
 	tagRef := filepath.Join(h.Repository, "files:"+file.Tag)
 
@@ -571,28 +590,30 @@ func (h *Handler) removeRepositoryFile(ctx context.Context, file *mirrordb.Repos
 
 func toRepositoryFileAPI(file *mirrordb.RepositoryFile) *apiv1.RepositoryFile {
 	return &apiv1.RepositoryFile{
-		Tag:          file.Tag,
-		Name:         file.Name,
-		Reference:    file.Reference,
-		Parent:       file.Parent,
-		Link:         file.Link,
-		ModifiedTime: utils.TimeToString(file.ModifiedTime),
-		Mode:         file.Mode,
-		Size:         file.Size,
-		ConfigID:     file.ConfigID,
+		Tag:           file.Tag,
+		Name:          file.Name,
+		Reference:     file.Reference,
+		Parent:        file.Parent,
+		Link:          file.Link,
+		LinkReference: file.LinkReference,
+		ModifiedTime:  utils.TimeToString(file.ModifiedTime),
+		Mode:          file.Mode,
+		Size:          file.Size,
+		ConfigID:      file.ConfigID,
 	}
 }
 
 func toRepositoryFileDB(file *apiv1.RepositoryFile) *mirrordb.RepositoryFile {
 	return &mirrordb.RepositoryFile{
-		Tag:          file.Tag,
-		Name:         file.Name,
-		Reference:    file.Reference,
-		Parent:       file.Parent,
-		Link:         file.Link,
-		ModifiedTime: utils.StringToTime(file.ModifiedTime),
-		Mode:         file.Mode,
-		Size:         file.Size,
-		ConfigID:     file.ConfigID,
+		Tag:           file.Tag,
+		Name:          file.Name,
+		Reference:     file.Reference,
+		Parent:        file.Parent,
+		Link:          file.Link,
+		LinkReference: file.LinkReference,
+		ModifiedTime:  utils.StringToTime(file.ModifiedTime),
+		Mode:          file.Mode,
+		Size:          file.Size,
+		ConfigID:      file.ConfigID,
 	}
 }
