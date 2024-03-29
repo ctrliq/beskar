@@ -13,3 +13,11 @@ func TimeToString(t int64) string {
 	}
 	return time.Unix(t, 0).Format(timeFormat)
 }
+
+func StringToTime(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	t, _ := time.Parse(timeFormat, s)
+	return t.Unix()
+}

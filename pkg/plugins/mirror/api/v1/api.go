@@ -115,6 +115,11 @@ type Mirror interface { //nolint:interfacebloat
 	//kun:success statusCode=200
 	SyncRepository(ctx context.Context, repository string, wait bool) (err error)
 
+	// Sync Mirror repository with an upstream repository using a specified config.
+	//kun:op GET /repository/sync:config
+	//kun:success statusCode=200
+	SyncRepositoryWithConfig(ctx context.Context, repository string, mirrorConfigs []MirrorConfig, webConfig *WebConfig, wait bool) (err error)
+
 	// Generate Mirror web pages .
 	//kun:op GET /repository/generate:web
 	//kun:success statusCode=200

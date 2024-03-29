@@ -53,6 +53,13 @@ func (p *Plugin) SyncRepository(ctx context.Context, repository string, wait boo
 	return p.repositoryManager.Get(ctx, repository).SyncRepository(ctx, wait)
 }
 
+func (p *Plugin) SyncRepositoryWithConfig(ctx context.Context, repository string, mirrorConfigs []apiv1.MirrorConfig, webConfig *apiv1.WebConfig, wait bool) (err error) {
+	if err := checkRepository(repository); err != nil {
+		return err
+	}
+	return p.repositoryManager.Get(ctx, repository).SyncRepositoryWithConfig(ctx, mirrorConfigs, webConfig, wait)
+}
+
 func (p *Plugin) GenerateRepository(ctx context.Context, repository string) (err error) {
 	if err := checkRepository(repository); err != nil {
 		return err

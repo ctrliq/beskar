@@ -181,6 +181,18 @@ paths:
           schema:
             $ref: "#/definitions/SyncRepositoryRequestBody"
       %s
+  /repository/sync:config:
+    get:
+      description: "Sync Mirror repository with an upstream repository using a specified config."
+      operationId: "SyncRepositoryWithConfig"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/SyncRepositoryWithConfigRequestBody"
+      %s
 `
 )
 
@@ -199,6 +211,7 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "ListRepositoryFiles", 200, &ListRepositoryFilesResponse{}),
 		oas2.GetOASResponses(schema, "ListRepositoryLogs", 200, &ListRepositoryLogsResponse{}),
 		oas2.GetOASResponses(schema, "SyncRepository", 200, &SyncRepositoryResponse{}),
+		oas2.GetOASResponses(schema, "SyncRepositoryWithConfig", 200, &SyncRepositoryWithConfigResponse{}),
 	}
 }
 
@@ -271,6 +284,14 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		Wait       bool   `json:"wait"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "SyncRepository", 200, (&SyncRepositoryResponse{}).Body())
+
+	oas2.AddDefinition(defs, "SyncRepositoryWithConfigRequestBody", reflect.ValueOf(&struct {
+		Repository    string         `json:"repository"`
+		MirrorConfigs []MirrorConfig `json:"mirror_configs"`
+		WebConfig     *WebConfig     `json:"web_config"`
+		Wait          bool           `json:"wait"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "SyncRepositoryWithConfig", 200, (&SyncRepositoryWithConfigResponse{}).Body())
 
 	oas2.AddDefinition(defs, "UpdateRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string                `json:"repository"`
