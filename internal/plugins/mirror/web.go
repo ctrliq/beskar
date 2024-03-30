@@ -6,6 +6,7 @@ package mirror
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -14,6 +15,19 @@ import (
 	apiv1 "go.ciq.dev/beskar/pkg/plugins/mirror/api/v1"
 	"go.ciq.dev/go-rsync/rsync"
 )
+
+func hasPathPrefix(path, prefix string) bool {
+	pathSplit := strings.Split(path, "/")
+	prefixSplit := strings.Split(prefix, "/")
+
+	for i, p := range prefixSplit {
+		if p != pathSplit[i] {
+			return false
+		}
+	}
+
+	return true
+}
 
 func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.RepositoryFile, error) {
 	symlinks, err := p.repositoryManager.Get(p.ctx, repository).ListRepositorySymlinks(p.ctx, nil)
@@ -30,8 +44,14 @@ func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.Repository
 		// Check if file has a symlink in its path and replace it
 		var replacement string
 		for _, symlink := range symlinks {
-			if strings.HasPrefix(intermediate, symlink.Reference) {
-				replacement = strings.Replace(intermediate, symlink.Reference, symlink.Link, 1)
+			if hasPathPrefix(intermediate, symlink.Name) {
+				// Ensure link directory is preserved and only the link is replaced.
+				replacementPrefix := symlink.Link
+				if strings.Contains(symlink.Name, "/") {
+					replacementPrefix = path.Join(path.Dir(symlink.Name), symlink.Link)
+				}
+
+				replacement = strings.Replace(intermediate, symlink.Name, replacementPrefix, 1)
 				break
 			}
 		}
@@ -39,7 +59,7 @@ func (p *Plugin) resolveSymlinks(repository, fileName string) (*apiv1.Repository
 			return nil, fmt.Errorf("not found")
 		}
 
-		repositoryFile, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFileByReference(p.ctx, replacement)
+		repositoryFile, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFile(p.ctx, replacement)
 		if err != nil && !strings.Contains(err.Error(), "no entry found") {
 			return nil, err
 		} else if err == nil {

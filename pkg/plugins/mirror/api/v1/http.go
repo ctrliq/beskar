@@ -66,6 +66,20 @@ func NewHTTPRouter(svc Mirror, codecs httpcodec.Codecs, opts ...httpoption.Optio
 		),
 	)
 
+	codec = codecs.EncodeDecoder("DeleteRepositoryFilesByMode")
+	validator = options.RequestValidator("DeleteRepositoryFilesByMode")
+	r.Method(
+		"DELETE", "/repository/file:mode",
+		kithttp.NewServer(
+			MakeEndpointOfDeleteRepositoryFilesByMode(svc),
+			decodeDeleteRepositoryFilesByModeRequest(codec, validator),
+			httpcodec.MakeResponseEncoder(codec, 200),
+			append(kitOptions,
+				kithttp.ServerErrorEncoder(httpcodec.MakeErrorEncoder(codec)),
+			)...,
+		),
+	)
+
 	codec = codecs.EncodeDecoder("GenerateRepository")
 	validator = options.RequestValidator("GenerateRepository")
 	r.Method(
@@ -258,6 +272,22 @@ func decodeDeleteRepositoryRequest(codec httpcodec.Codec, validator httpoption.V
 func decodeDeleteRepositoryFileRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
 	return func(_ context.Context, r *http.Request) (interface{}, error) {
 		var _req DeleteRepositoryFileRequest
+
+		if err := codec.DecodeRequestBody(r, &_req); err != nil {
+			return nil, err
+		}
+
+		if err := validator.Validate(&_req); err != nil {
+			return nil, err
+		}
+
+		return &_req, nil
+	}
+}
+
+func decodeDeleteRepositoryFilesByModeRequest(codec httpcodec.Codec, validator httpoption.Validator) kithttp.DecodeRequestFunc {
+	return func(_ context.Context, r *http.Request) (interface{}, error) {
+		var _req DeleteRepositoryFilesByModeRequest
 
 		if err := codec.DecodeRequestBody(r, &_req); err != nil {
 			return nil, err

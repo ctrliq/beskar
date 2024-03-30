@@ -193,15 +193,16 @@ func (s *MirrorSyncer) filePush(remoteFile *mirrordb.RepositoryFile) error {
 	tag := hex.EncodeToString(sum[:])
 
 	err = s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-		Tag:          tag,
-		Name:         remoteFile.Name,
-		Reference:    fileReference,
-		Parent:       filepath.Dir(remoteFile.Name),
-		Link:         "",
-		ModifiedTime: remoteFile.ModifiedTime,
-		Mode:         remoteFile.Mode,
-		Size:         remoteFile.Size,
-		ConfigID:     s.configID,
+		Tag:           tag,
+		Name:          remoteFile.Name,
+		Reference:     fileReference,
+		Parent:        filepath.Dir(remoteFile.Name),
+		Link:          "",
+		LinkReference: "",
+		ModifiedTime:  remoteFile.ModifiedTime,
+		Mode:          remoteFile.Mode,
+		Size:          remoteFile.Size,
+		ConfigID:      s.configID,
 	})
 	if err != nil {
 		s.h.logger.Error("Failed to add file to repository database", "file", remoteFile.Name, "error", err)
@@ -260,15 +261,16 @@ func (s *MirrorSyncer) Sync() error {
 			tag := hex.EncodeToString(sum[:])
 
 			err := s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-				Tag:          tag,
-				Name:         remoteFile.Name,
-				Reference:    fileReference,
-				Parent:       filepath.Dir(remoteFile.Name),
-				Link:         "",
-				ModifiedTime: remoteFile.ModifiedTime,
-				Mode:         remoteFile.Mode,
-				Size:         remoteFile.Size,
-				ConfigID:     s.configID,
+				Tag:           tag,
+				Name:          remoteFile.Name,
+				Reference:     fileReference,
+				Parent:        filepath.Dir(remoteFile.Name),
+				Link:          "",
+				LinkReference: "",
+				ModifiedTime:  remoteFile.ModifiedTime,
+				Mode:          remoteFile.Mode,
+				Size:          remoteFile.Size,
+				ConfigID:      s.configID,
 			})
 			if err != nil {
 				return err
@@ -291,15 +293,16 @@ func (s *MirrorSyncer) Sync() error {
 			tag := hex.EncodeToString(sum[:])
 
 			err := s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-				Tag:          tag,
-				Name:         remoteFile.Name,
-				Reference:    remoteFile.Name,
-				Parent:       filepath.Dir(remoteFile.Name),
-				Link:         link,
-				ModifiedTime: remoteFile.ModifiedTime,
-				Mode:         remoteFile.Mode,
-				Size:         remoteFile.Size,
-				ConfigID:     s.configID,
+				Tag:           tag,
+				Name:          remoteFile.Name,
+				Reference:     remoteFile.Name,
+				Parent:        filepath.Dir(remoteFile.Name),
+				Link:          remoteFile.Link,
+				LinkReference: link,
+				ModifiedTime:  remoteFile.ModifiedTime,
+				Mode:          remoteFile.Mode,
+				Size:          remoteFile.Size,
+				ConfigID:      s.configID,
 			})
 			if err != nil {
 				return err

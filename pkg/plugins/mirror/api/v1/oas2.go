@@ -97,6 +97,18 @@ paths:
           schema:
             $ref: "#/definitions/GetRepositoryFileRequestBody"
       %s
+  /repository/file:mode:
+    delete:
+      description: "Delete files by mode for a Mirror repository."
+      operationId: "DeleteRepositoryFilesByMode"
+      tags:
+        - mirror
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/DeleteRepositoryFilesByModeRequestBody"
+      %s
   /repository/generate:web:
     get:
       description: "Generate Mirror web pages ."
@@ -204,6 +216,7 @@ func getResponses(schema oas2.Schema) []oas2.OASResponses {
 		oas2.GetOASResponses(schema, "UpdateRepository", 200, &UpdateRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "DeleteRepositoryFile", 200, &DeleteRepositoryFileResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositoryFile", 200, &GetRepositoryFileResponse{}),
+		oas2.GetOASResponses(schema, "DeleteRepositoryFilesByMode", 200, &DeleteRepositoryFilesByModeResponse{}),
 		oas2.GetOASResponses(schema, "GenerateRepository", 200, &GenerateRepositoryResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositoryFileCount", 200, &GetRepositoryFileCountResponse{}),
 		oas2.GetOASResponses(schema, "GetRepositorySyncPlan", 200, &GetRepositorySyncPlanResponse{}),
@@ -235,6 +248,12 @@ func getDefinitions(schema oas2.Schema) map[string]oas2.Definition {
 		File       string `json:"file"`
 	}{}))
 	oas2.AddResponseDefinitions(defs, schema, "DeleteRepositoryFile", 200, (&DeleteRepositoryFileResponse{}).Body())
+
+	oas2.AddDefinition(defs, "DeleteRepositoryFilesByModeRequestBody", reflect.ValueOf(&struct {
+		Repository string `json:"repository"`
+		Mode       uint32 `json:"mode"`
+	}{}))
+	oas2.AddResponseDefinitions(defs, schema, "DeleteRepositoryFilesByMode", 200, (&DeleteRepositoryFilesByModeResponse{}).Body())
 
 	oas2.AddDefinition(defs, "GenerateRepositoryRequestBody", reflect.ValueOf(&struct {
 		Repository string `json:"repository"`

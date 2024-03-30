@@ -181,6 +181,55 @@ func (c *HTTPClient) DeleteRepositoryFile(ctx context.Context, repository string
 	return nil
 }
 
+func (c *HTTPClient) DeleteRepositoryFilesByMode(ctx context.Context, repository string, mode uint32) (err error) {
+	codec := c.codecs.EncodeDecoder("DeleteRepositoryFilesByMode")
+
+	path := "/repository/file:mode"
+	u := &url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   c.pathPrefix + path,
+	}
+
+	reqBody := struct {
+		Repository string `json:"repository"`
+		Mode       uint32 `json:"mode"`
+	}{
+		Repository: repository,
+		Mode:       mode,
+	}
+	reqBodyReader, headers, err := codec.EncodeRequestBody(&reqBody)
+	if err != nil {
+		return err
+	}
+
+	_req, err := http.NewRequestWithContext(ctx, "DELETE", u.String(), reqBodyReader)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range headers {
+		_req.Header.Set(k, v)
+	}
+
+	_resp, err := c.httpClient.Do(_req)
+	if err != nil {
+		return err
+	}
+	defer _resp.Body.Close()
+
+	if _resp.StatusCode < http.StatusOK || _resp.StatusCode > http.StatusNoContent {
+		var respErr error
+		err := codec.DecodeFailureResponse(_resp.Body, &respErr)
+		if err == nil {
+			err = respErr
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (c *HTTPClient) GenerateRepository(ctx context.Context, repository string) (err error) {
 	codec := c.codecs.EncodeDecoder("GenerateRepository")
 

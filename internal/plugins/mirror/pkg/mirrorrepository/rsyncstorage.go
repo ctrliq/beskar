@@ -111,16 +111,18 @@ func (s *Storage) Put(filePath string, content io.Reader, fileSize int64, metada
 
 	name := filepath.Clean(filePath)
 
-	var link string
+	var link, linkReference string
 	if metadata.Mode.IsLNK() {
 		c, err := io.ReadAll(content)
 		if err != nil {
 			return 0, err
 		}
 
+		link = string(c)
+
 		intermediate := filepath.Clean(s.h.generateFileReference(strings.ToLower(string(c))))
 		target := strings.TrimPrefix(intermediate, s.h.Repository)
-		link = filepath.Join(filepath.Dir(fileReference), target)
+		linkReference = filepath.Join(filepath.Dir(fileReference), target)
 
 		// Set reference on links to something unique, but not used
 		fileReference = name
@@ -131,15 +133,16 @@ func (s *Storage) Put(filePath string, content io.Reader, fileSize int64, metada
 	tag := hex.EncodeToString(sum[:])
 
 	err = s.h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
-		Tag:          tag,
-		Name:         name,
-		Reference:    fileReference,
-		Parent:       filepath.Dir(name),
-		Link:         link,
-		ModifiedTime: int64(metadata.Mtime),
-		Mode:         uint32(metadata.Mode),
-		Size:         uint64(fileSize),
-		ConfigID:     s.configID,
+		Tag:           tag,
+		Name:          name,
+		Reference:     fileReference,
+		Parent:        filepath.Dir(name),
+		Link:          link,
+		LinkReference: linkReference,
+		ModifiedTime:  int64(metadata.Mtime),
+		Mode:          uint32(metadata.Mode),
+		Size:          uint64(fileSize),
+		ConfigID:      s.configID,
 	})
 	if err != nil {
 		return 0, err
