@@ -470,6 +470,25 @@ func (h *Handler) GetRepositoryFile(ctx context.Context, name string) (repositor
 	return toRepositoryFileAPI(fileDB), nil
 }
 
+func (h *Handler) GetRepositoryFileRaw(ctx context.Context, name string) (repositoryFile *mirrordb.RepositoryFile, err error) {
+	if !h.Started() {
+		return nil, werror.Wrap(gcode.ErrUnavailable, err)
+	}
+
+	db, err := h.getRepositoryDB(ctx)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+	defer db.Close(false)
+
+	fileDB, err := db.GetFileByName(ctx, name)
+	if err != nil {
+		return nil, werror.Wrap(gcode.ErrInternal, err)
+	}
+
+	return fileDB, nil
+}
+
 func (h *Handler) GetRepositoryFileByReferenceRaw(ctx context.Context, reference string) (repositoryFile *mirrordb.RepositoryFile, err error) {
 	if !h.Started() {
 		return nil, werror.Wrap(gcode.ErrUnavailable, err)

@@ -88,8 +88,14 @@ func (h *Handler) GenerateIndexes() error {
 					return err
 				}
 
-				h.logger.Debug("Processing symlink", "file", fileInfo.Name, "link", file.Link)
-				targetInfo, err := h.GetRepositoryFileByReferenceRaw(context.Background(), file.Link)
+				// Ensure link directory is preserved and only the link is replaced.
+				targetName := file.Link
+				if strings.Contains(file.Name, "/") {
+					targetName = path.Join(path.Dir(file.Name), file.Link)
+				}
+
+				h.logger.Debug("Processing symlink", "file", fileInfo.Name, "link", file.Link, "target", targetName)
+				targetInfo, err := h.GetRepositoryFileRaw(context.Background(), targetName)
 				if err != nil {
 					h.logger.Error("Failed to get target info", "error", err.Error(), "link", file.Link)
 					return err
@@ -98,13 +104,13 @@ func (h *Handler) GenerateIndexes() error {
 				if rsync.FileMode(targetInfo.Mode).IsDIR() {
 					c.Directories = append(c.Directories, index.Directory{
 						Name:  filepath.Base(file.Name),
-						Ref:   path.Join(webPrefix, strings.TrimPrefix(file.Link, h.Repository)),
+						Ref:   path.Join(webPrefix, targetName),
 						MTime: time.Unix(file.ModifiedTime, 0),
 					})
 				} else {
 					c.Files = append(c.Files, index.File{
 						Name:  filepath.Base(fileInfo.Name),
-						Ref:   path.Join(webPrefix, filepath.Clean(targetInfo.Name)),
+						Ref:   path.Join(webPrefix, targetName),
 						MTime: time.Unix(targetInfo.ModifiedTime, 0),
 						Size:  targetInfo.Size,
 					})
