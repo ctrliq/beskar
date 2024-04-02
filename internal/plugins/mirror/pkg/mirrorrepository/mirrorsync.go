@@ -9,7 +9,6 @@ import (
 	"crypto/md5" //nolint:gosec
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -278,14 +277,7 @@ func (s *MirrorSyncer) Sync() error {
 		} else if rsync.FileMode(remoteFile.Mode).IsLNK() {
 			s.h.logger.Debug("Processing Link", "content", remoteFile.Link)
 
-			// Split first 3 path elements from link and take the rest as the reference.
-			split := strings.SplitN(remoteFile.Link, "/", 4)
-			if len(split) < 4 {
-				s.h.logger.Error("Failed to split link", "link", remoteFile.Link)
-				return fmt.Errorf("failed to split link: %q", remoteFile.Link)
-			}
-
-			link := s.h.generateFileReference(strings.ToLower(split[3]))
+			link := s.h.generateFileReference(strings.ToLower(remoteFile.Link))
 
 			// Add entry to DB
 			//nolint:gosec
