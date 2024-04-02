@@ -110,7 +110,7 @@ func (p *Plugin) WebHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, fmt.Sprintf("/%s/file/%s", repo, file), http.StatusMovedPermanently)
 		return
 	} else if rsync.FileMode(repositoryFile.Mode).IsLNK() {
-		file, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFileByReferenceRaw(p.ctx, repositoryFile.Link)
+		file, err := p.repositoryManager.Get(p.ctx, repository).GetRepositoryFile(p.ctx, repositoryFile.Link)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
