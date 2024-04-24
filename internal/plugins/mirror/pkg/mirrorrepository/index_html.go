@@ -31,35 +31,31 @@ func (h *Handler) GenerateIndexes() error {
 		webPrefix = h.getWebConfig().Prefix
 	}
 
-	parents, err := h.listRepositoryDistinctParents(context.Background())
+	directories, err := h.listRepositoryDirectories(context.Background())
 	if err != nil {
 		h.logger.Error("Failed to list distinct parents", "error", err.Error())
 		return err
 	}
 
-	sort.Strings(parents)
+	// Sort parents to ensure consistent index generation
+	sort.Slice(directories, func(i, j int) bool {
+		return directories[i].Name < directories[j].Name
+	})
 
-	for _, p := range parents {
-		// Get parentInfo file info
-		parentInfo, err := h.getRepositoryFile(context.Background(), p)
-		if err != nil {
-			h.logger.Error("Failed to get parent info", "error", err.Error(), "parent", p)
-			return err
-		}
-
+	for _, directory := range directories {
 		// Generate index config for parent
 		c := index.Config{
-			Current: path.Join(webPrefix, filepath.Clean(parentInfo.Name)),
+			Current: path.Join(webPrefix, filepath.Clean(directory.Name)),
 		}
 
 		// Don't set previous for root directory
-		if filepath.Clean(parentInfo.Name) != filepath.Dir(parentInfo.Name) {
-			c.Previous = path.Join(webPrefix, filepath.Dir(parentInfo.Name))
+		if filepath.Clean(directory.Name) != filepath.Dir(directory.Name) {
+			c.Previous = path.Join(webPrefix, filepath.Dir(directory.Name))
 		}
 
-		files, err := h.listRepositoryFilesByParent(context.Background(), p)
+		files, err := h.listRepositoryFilesByParent(context.Background(), directory.Name)
 		if err != nil {
-			h.logger.Error("Failed to list files by parent", "error", err.Error(), "parent", p)
+			h.logger.Error("Failed to list files by parent", "error", err.Error(), "directory", directory.Name)
 			return err
 		}
 
@@ -131,7 +127,7 @@ func (h *Handler) GenerateIndexes() error {
 			return err
 		}
 
-		pusher, err := orasmirror.NewStaticFileStreamPusher(bytes.NewReader(rawIndex), "index.html", parentInfo.Reference, h.Params.NameOptions...)
+		pusher, err := orasmirror.NewStaticFileStreamPusher(bytes.NewReader(rawIndex), "index.html", directory.Reference, h.Params.NameOptions...)
 		if err != nil {
 			return err
 		}
@@ -142,24 +138,24 @@ func (h *Handler) GenerateIndexes() error {
 		}
 
 		//nolint:gosec
-		s := md5.Sum([]byte(parentInfo.Reference))
+		s := md5.Sum([]byte(directory.Reference))
 		tag := hex.EncodeToString(s[:])
 
 		err = h.addFileToRepositoryDatabase(context.Background(), &mirrordb.RepositoryFile{
 			Tag:          tag,
-			Name:         parentInfo.Name,
-			Reference:    parentInfo.Reference,
-			Parent:       parentInfo.Parent,
-			ModifiedTime: parentInfo.ModifiedTime,
-			Mode:         parentInfo.Mode,
-			Size:         parentInfo.Size,
-			ConfigID:     parentInfo.ConfigID,
+			Name:         directory.Name,
+			Reference:    directory.Reference,
+			Parent:       directory.Parent,
+			ModifiedTime: directory.ModifiedTime,
+			Mode:         directory.Mode,
+			Size:         directory.Size,
+			ConfigID:     directory.ConfigID,
 		})
 		if err != nil {
 			return err
 		}
 
-		h.logger.Debug("Generated Index", "Name", parentInfo.Name, "Reference", parentInfo.Reference)
+		h.logger.Debug("Generated Index", "Name", directory.Name, "Reference", directory.Reference)
 	}
 
 	return nil
