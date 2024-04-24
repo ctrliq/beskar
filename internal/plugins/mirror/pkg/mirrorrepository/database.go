@@ -14,6 +14,7 @@ import (
 	"github.com/RussellLuo/kun/pkg/werror"
 	"github.com/RussellLuo/kun/pkg/werror/gcode"
 	"go.ciq.dev/beskar/internal/plugins/mirror/pkg/mirrordb"
+	"go.ciq.dev/go-rsync/rsync"
 )
 
 func (h *Handler) generateFileReference(file string) string {
@@ -132,20 +133,23 @@ func (h *Handler) listRepositoryFilesByConfigID(ctx context.Context, configID ui
 	return repositoryFiles, nil
 }
 
-func (h *Handler) listRepositoryDistinctParents(ctx context.Context) (repositoryParents []string, err error) {
+func (h *Handler) listRepositoryDirectories(ctx context.Context) (repositoryFiles []*mirrordb.RepositoryFile, err error) {
 	db, err := h.getRepositoryDB(ctx)
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 	defer db.Close(false)
 
-	err = db.WalkFilesByDistinctParent(ctx, func(parent *string) error {
-		repositoryParents = append(repositoryParents, *parent)
+	err = db.WalkFiles(ctx, func(file *mirrordb.RepositoryFile) error {
+		if rsync.FileMode(file.Mode).IsDIR() {
+			repositoryFiles = append(repositoryFiles, file)
+		}
+
 		return nil
 	})
 	if err != nil {
 		return nil, werror.Wrap(gcode.ErrInternal, err)
 	}
 
-	return repositoryParents, nil
+	return repositoryFiles, nil
 }
