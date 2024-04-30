@@ -38,6 +38,8 @@ type MirrorSyncer struct {
 	configID           uint64
 	parallelism        int
 	upstreamRepository string
+
+	client *http.Client
 }
 
 func NewMirrorSyncer(h *Handler, config mirrorConfig, configID uint64, parallelism int) (*MirrorSyncer, error) {
@@ -49,6 +51,13 @@ func NewMirrorSyncer(h *Handler, config mirrorConfig, configID uint64, paralleli
 		configID:           configID,
 		parallelism:        parallelism,
 		upstreamRepository: path.Join("artifacts/mirror", repository),
+		client: &http.Client{
+			Transport: &http.Transport{
+				// Disable compression handling so compressed
+				// files are preserved as they are when synchronized.
+				DisableCompression: true,
+			},
+		},
 	}, nil
 }
 
@@ -127,7 +136,7 @@ func (s *MirrorSyncer) filePush(remoteFile *mirrordb.RepositoryFile) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		s.h.logger.Error("Failed to fetch file", "file", remoteFile.Name, "error", err)
 		return err

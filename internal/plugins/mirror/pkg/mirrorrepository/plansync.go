@@ -30,6 +30,8 @@ type PlanSyncer struct {
 	parallelism int
 
 	plan *rsync.SyncPlan
+
+	client *http.Client
 }
 
 func NewPlanSyncer(h *Handler, config mirrorConfig, configID uint64, parallelism int, plan *rsync.SyncPlan) *PlanSyncer {
@@ -39,6 +41,13 @@ func NewPlanSyncer(h *Handler, config mirrorConfig, configID uint64, parallelism
 		configID:    configID,
 		parallelism: parallelism,
 		plan:        plan,
+		client: &http.Client{
+			Transport: &http.Transport{
+				// Disable compression handling so compressed
+				// files are preserved as they are when synchronized.
+				DisableCompression: true,
+			},
+		},
 	}
 }
 
@@ -52,7 +61,7 @@ func (s *PlanSyncer) filePush(remoteFile rsync.FileInfo) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		s.h.logger.Error("Failed to fetch file", "file", string(remoteFile.Path), "error", err)
 		return err
