@@ -9,7 +9,7 @@ import (
 
 const (
 	DefaultSyncTimeout        = time.Hour
-	DefaultSyncMaxWorkerCount = 100
+	DefaultSyncMaxWorkerCount = 10
 )
 
 type SyncConfig struct {

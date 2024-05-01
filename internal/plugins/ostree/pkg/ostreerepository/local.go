@@ -94,7 +94,7 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 	}
 
 	// Add beskar as a remote so that we can pull from it
-	beskarServiceURL := "http://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo")
+	beskarServiceURL := "https://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo")
 	if err := repo.AddRemote(beskarRemoteName, beskarServiceURL, libostree.NoGPGVerify()); err != nil {
 		return ctl.Errf("adding remote to ostree repository %s: %s", beskarRemoteName, err)
 	}
@@ -104,11 +104,7 @@ func (h *Handler) BeginLocalRepoTransaction(ctx context.Context, tFn Transaction
 		if err := repo.Pull(
 			ctx,
 			beskarRemoteName,
-			h.standardPullOptions(
-				libostree.HTTPHeaders(map[string]string{
-					"Connection": "close",
-				}),
-			)...,
+			h.standardPullOptions()...,
 		); err != nil {
 			return ctl.Errf("pulling ostree repository from %s: %s", beskarRemoteName, err)
 		}

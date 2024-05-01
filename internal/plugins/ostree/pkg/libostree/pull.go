@@ -259,3 +259,66 @@ func HTTPHeaders(headers map[string]string) Option {
 		)
 	}
 }
+
+// TLSPermissive sets the tls-permissive option to true in the pull options.
+// A boolean value, defaults to false. By default, server TLS certificates will be checked against the system certificate
+// store. If this variable is set, any certificate will be accepted.
+func TLSPermissive() Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		key := C.CString("tls-permissive")
+		deferFree(unsafe.Pointer(key))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_new_boolean(C.gboolean(1))),
+		)
+	}
+}
+
+// TLSClientCertPath sets the tls-client-cert-path option to the given value in the pull options.
+// Path to file for client-side certificate, to present when making requests to this repository.
+func TLSClientCertPath(path string) Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		key := C.CString("tls-client-cert-path")
+		deferFree(unsafe.Pointer(key))
+		value := C.CString(path)
+		deferFree(unsafe.Pointer(value))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_new_string(value)),
+		)
+	}
+}
+
+// TLSClientKeyPath sets the tls-client-key-path option to the given value in the pull options.
+// Path to file containing client-side certificate key, to present when making requests to this repository.
+func TLSClientKeyPath(path string) Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		key := C.CString("tls-client-key-path")
+		deferFree(unsafe.Pointer(key))
+		value := C.CString(path)
+		deferFree(unsafe.Pointer(value))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_new_string(value)),
+		)
+	}
+}
+
+// TLSCAPath sets the tls-ca-path option to the given value in the pull options.
+// Path to file containing trusted anchors instead of the system CA database.
+func TLSCAPath(path string) Option {
+	return func(builder *C.GVariantBuilder, deferFree deferredFreeFn) {
+		key := C.CString("tls-ca-path")
+		deferFree(unsafe.Pointer(key))
+		value := C.CString(path)
+		deferFree(unsafe.Pointer(value))
+		gVariantBuilderAddVariant(
+			builder,
+			key,
+			C.g_variant_new_variant(C.g_variant_new_string(value)),
+		)
+	}
+}

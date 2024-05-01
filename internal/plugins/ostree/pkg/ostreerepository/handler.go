@@ -133,7 +133,7 @@ func (h *Handler) Start(ctx context.Context) {
 // pullConfig pulls the config file from beskar.
 func (h *Handler) pullFile(ctx context.Context, filename string) error {
 	// TODO: Replace with appropriate puller mechanism
-	url := "http://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo", filename)
+	url := "https://" + h.Params.GetBeskarRegistryHostPort() + path.Join("/", h.Repository, "repo", filename)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
