@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"reflect"
 	"strconv"
 	"syscall"
@@ -90,8 +91,12 @@ func New(beskarConfig *config.BeskarConfig) (context.Context, *Registry, error) 
 	ctx, waitFunc := sighandler.New(beskarRegistry.errCh, syscall.SIGINT)
 	beskarRegistry.wait = waitFunc
 
+	logger := logrus.StandardLogger()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetOutput(os.Stdout)
+
 	beskarRegistry.router = mux.NewRouter()
-	beskarRegistry.logger = logrus.StandardLogger().WithField("version", version.Semver).WithField("service", "beskar")
+	beskarRegistry.logger = logger.WithField("version", version.Semver).WithField("service", "beskar")
 
 	// for probes
 	beskarRegistry.router.Handle("/", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
