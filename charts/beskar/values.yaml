@@ -29,6 +29,7 @@ services:
     # sessionAffinity: None
     # sessionAffinityConfig: {}
     # clusterIP:
+    host: 0.0.0.0
     port: 5000
     # nodePort:
     # loadBalancerIP:
@@ -38,11 +39,13 @@ services:
   gossip:
     # sessionAffinity: None
     # sessionAffinityConfig: {}
+    host: 0.0.0.0
     port: 5002
     annotations: {}
   groupcache:
     # sessionAffinity: None
     # sessionAffinityConfig: {}
+    host: 0.0.0.0
     port: 5003
     annotations: {}
 
@@ -149,6 +152,7 @@ proxy:
 
 metrics:
   enabled: true
+  host: 0.0.0.0
   port: 5001
   # Create a prometheus-operator servicemonitor
   serviceMonitor:

@@ -62,13 +62,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       name: beskar-gossip-secret
       key: gossipKey
 - name: BESKAR_REGISTRY_HTTP_ADDR
-  value: {{ printf ":%v" .Values.services.registry.port | quote }}
+  value: {{ printf "%v:%v" .Values.services.registry.host .Values.services.registry.port | quote }}
 - name: BESKAR_REGISTRY_HTTP_DEBUG_ADDR
-  value: {{ printf ":%v" .Values.metrics.port | quote }}
+  value: {{ printf "%v:%v" .Values.metrics.host .Values.metrics.port | quote }}
 - name: BESKAR_GOSSIP_ADDR
-  value: {{ printf ":%v" .Values.services.gossip.port | quote }}
+  value: {{ printf "%v:%v" .Values.services.gossip.host .Values.services.gossip.port | quote }}
 - name: BESKAR_CACHE_ADDR
-  value: {{ printf ":%v" .Values.services.groupcache.port | quote }}
+  value: {{ printf "%v:%v" .Values.services.groupcache.host .Values.services.groupcache.port | quote }}
 - name: BESKAR_HOSTNAME
   value: {{ template "beskar.fullname" . }}
 {{- if .Values.secrets.htpasswd }}
