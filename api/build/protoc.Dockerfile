@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=alpine:3.17
+ARG BASE_IMAGE=alpine:3.18.12
 ARG GOLANG_IMAGE=golang:1.20.6-alpine
 
 FROM $GOLANG_IMAGE as golang
